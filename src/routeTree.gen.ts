@@ -13,6 +13,7 @@ import { Route as InsightsRouteImport } from './routes/insights'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as AvailabilityRouteImport } from './routes/availability'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiSearchRouteImport } from './routes/api/search'
 
 const InsightsRoute = InsightsRouteImport.update({
   id: '/insights',
@@ -34,18 +35,25 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiSearchRoute = ApiSearchRouteImport.update({
+  id: '/api/search',
+  path: '/api/search',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/availability': typeof AvailabilityRoute
   '/chat': typeof ChatRoute
   '/insights': typeof InsightsRoute
+  '/api/search': typeof ApiSearchRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/availability': typeof AvailabilityRoute
   '/chat': typeof ChatRoute
   '/insights': typeof InsightsRoute
+  '/api/search': typeof ApiSearchRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -53,13 +61,14 @@ export interface FileRoutesById {
   '/availability': typeof AvailabilityRoute
   '/chat': typeof ChatRoute
   '/insights': typeof InsightsRoute
+  '/api/search': typeof ApiSearchRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/availability' | '/chat' | '/insights'
+  fullPaths: '/' | '/availability' | '/chat' | '/insights' | '/api/search'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/availability' | '/chat' | '/insights'
-  id: '__root__' | '/' | '/availability' | '/chat' | '/insights'
+  to: '/' | '/availability' | '/chat' | '/insights' | '/api/search'
+  id: '__root__' | '/' | '/availability' | '/chat' | '/insights' | '/api/search'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -67,6 +76,7 @@ export interface RootRouteChildren {
   AvailabilityRoute: typeof AvailabilityRoute
   ChatRoute: typeof ChatRoute
   InsightsRoute: typeof InsightsRoute
+  ApiSearchRoute: typeof ApiSearchRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -99,6 +109,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/search': {
+      id: '/api/search'
+      path: '/api/search'
+      fullPath: '/api/search'
+      preLoaderRoute: typeof ApiSearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -107,6 +124,7 @@ const rootRouteChildren: RootRouteChildren = {
   AvailabilityRoute: AvailabilityRoute,
   ChatRoute: ChatRoute,
   InsightsRoute: InsightsRoute,
+  ApiSearchRoute: ApiSearchRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
