@@ -1,4 +1,5 @@
 import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
+import { AppSidebar, MobileNav } from "@/components/AppSidebar";
 
 import appCss from "../styles.css?url";
 
@@ -29,11 +30,11 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: "CommunityHub — Resource Intelligence" },
+      { name: "description", content: "Find clinics, NGOs, jobs, and municipal alerts in your community." },
+      { name: "author", content: "CommunityHub" },
+      { property: "og:title", content: "CommunityHub — Resource Intelligence" },
+      { property: "og:description", content: "Find clinics, NGOs, jobs, and municipal alerts in your community." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
@@ -65,5 +66,11 @@ function RootShell({ children }: { children: React.ReactNode }) {
 }
 
 function RootComponent() {
-  return <Outlet />;
+  return (
+    <div className="flex min-h-screen w-full bg-background">
+      <AppSidebar />
+      <main className="flex-1 min-w-0 pb-20 md:pb-0"><Outlet /></main>
+      <MobileNav />
+    </div>
+  );
 }
