@@ -1,16 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { Search, MapPin, ExternalLink, Stethoscope, HeartHandshake, Briefcase, AlertTriangle, Loader2, Sparkles } from "lucide-react";
+import { useT } from "@/lib/i18n";
 
 type Cat = "clinic" | "ngo" | "job" | "alert";
 type Result = { id: string; type: Cat; name: string; description: string; location: string; url: string };
 
-const filters: { key: "all" | Cat; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "clinic", label: "Clinics" },
-  { key: "ngo", label: "NGOs" },
-  { key: "job", label: "Jobs" },
-  { key: "alert", label: "Alerts" },
+const filters: { key: "all" | Cat; tk: "filter.all" | "filter.clinic" | "filter.ngo" | "filter.job" | "filter.alert" }[] = [
+  { key: "all", tk: "filter.all" },
+  { key: "clinic", tk: "filter.clinic" },
+  { key: "ngo", tk: "filter.ngo" },
+  { key: "job", tk: "filter.job" },
+  { key: "alert", tk: "filter.alert" },
 ];
 
 const typeMeta: Record<Cat, { label: string; icon: typeof MapPin; cls: string }> = {
