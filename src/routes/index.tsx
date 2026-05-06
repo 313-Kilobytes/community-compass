@@ -1,16 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { Search, MapPin, ExternalLink, Stethoscope, HeartHandshake, Briefcase, AlertTriangle, Loader2, Sparkles } from "lucide-react";
+import { useT } from "@/lib/i18n";
 
 type Cat = "clinic" | "ngo" | "job" | "alert";
 type Result = { id: string; type: Cat; name: string; description: string; location: string; url: string };
 
-const filters: { key: "all" | Cat; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "clinic", label: "Clinics" },
-  { key: "ngo", label: "NGOs" },
-  { key: "job", label: "Jobs" },
-  { key: "alert", label: "Alerts" },
+const filters: { key: "all" | Cat; tk: "filter.all" | "filter.clinic" | "filter.ngo" | "filter.job" | "filter.alert" }[] = [
+  { key: "all", tk: "filter.all" },
+  { key: "clinic", tk: "filter.clinic" },
+  { key: "ngo", tk: "filter.ngo" },
+  { key: "job", tk: "filter.job" },
+  { key: "alert", tk: "filter.alert" },
 ];
 
 const typeMeta: Record<Cat, { label: string; icon: typeof MapPin; cls: string }> = {
@@ -31,6 +32,7 @@ export const Route = createFileRoute("/")({
 });
 
 function ResourcesPage() {
+  const { t } = useT();
   const [q, setQ] = useState("");
   const [loc, setLoc] = useState("");
   const [type, setType] = useState<"all" | Cat>("all");
@@ -73,13 +75,13 @@ function ResourcesPage() {
         <div className="absolute -top-24 -right-24 h-72 w-72 rounded-full opacity-30 blur-3xl" style={{ background: "white" }} />
         <div className="relative max-w-2xl">
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 backdrop-blur-sm border border-white/20 text-xs font-medium">
-            <Sparkles className="h-3 w-3" /> Live community intelligence
+            <Sparkles className="h-3 w-3" /> {t("home.heroBadge")}
           </span>
           <h1 className="font-display text-3xl md:text-5xl font-bold tracking-tight mt-4 leading-[1.05]">
-            Find clinics, NGOs, jobs &amp;<br />alerts — anywhere.
+            {t("home.heroTitle")}
           </h1>
           <p className="text-white/85 mt-3 md:text-lg max-w-xl">
-            Real-time results scraped from across the web. One search, four resource types, zero noise.
+            {t("home.heroSub")}
           </p>
         </div>
       </section>
@@ -90,7 +92,7 @@ function ResourcesPage() {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Keyword (e.g. mental health, food bank)"
+            placeholder={t("search.placeholder")}
             className="w-full pl-10 pr-3 py-3 rounded-xl bg-background/60 border border-border focus:outline-none focus:ring-2 focus:ring-ring text-sm"
           />
         </div>
@@ -99,7 +101,7 @@ function ResourcesPage() {
           <input
             value={loc}
             onChange={(e) => setLoc(e.target.value)}
-            placeholder="Location (city or area)"
+            placeholder={t("location.placeholder")}
             className="w-full pl-10 pr-3 py-3 rounded-xl bg-background/60 border border-border focus:outline-none focus:ring-2 focus:ring-ring text-sm"
           />
         </div>
@@ -110,7 +112,7 @@ function ResourcesPage() {
           style={{ background: "var(--gradient-primary)" }}
         >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-          Search
+          {t("search.button")}
         </button>
       </form>
 
@@ -128,7 +130,7 @@ function ResourcesPage() {
               }`}
               style={active ? { background: "var(--gradient-primary)" } : undefined}
             >
-              {f.label}
+              {t(f.tk)}
             </button>
           );
         })}
@@ -152,10 +154,10 @@ function ResourcesPage() {
           <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary mb-3">
             <Search className="h-5 w-5" />
           </div>
-          <p className="text-muted-foreground">Enter a location and keyword to find real community resources.</p>
+          <p className="text-muted-foreground">{t("state.empty")}</p>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="text-center text-muted-foreground py-16">No results — try a different keyword or location.</div>
+        <div className="text-center text-muted-foreground py-16">{t("state.noResults")}</div>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((r) => {

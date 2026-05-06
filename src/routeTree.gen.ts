@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as InsightsRouteImport } from './routes/insights'
+import { Route as EmergencyRouteImport } from './routes/emergency'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as AvailabilityRouteImport } from './routes/availability'
 import { Route as IndexRouteImport } from './routes/index'
@@ -18,6 +19,11 @@ import { Route as ApiSearchRouteImport } from './routes/api/search'
 const InsightsRoute = InsightsRouteImport.update({
   id: '/insights',
   path: '/insights',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EmergencyRoute = EmergencyRouteImport.update({
+  id: '/emergency',
+  path: '/emergency',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ChatRoute = ChatRouteImport.update({
@@ -45,6 +51,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/availability': typeof AvailabilityRoute
   '/chat': typeof ChatRoute
+  '/emergency': typeof EmergencyRoute
   '/insights': typeof InsightsRoute
   '/api/search': typeof ApiSearchRoute
 }
@@ -52,6 +59,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/availability': typeof AvailabilityRoute
   '/chat': typeof ChatRoute
+  '/emergency': typeof EmergencyRoute
   '/insights': typeof InsightsRoute
   '/api/search': typeof ApiSearchRoute
 }
@@ -60,21 +68,42 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/availability': typeof AvailabilityRoute
   '/chat': typeof ChatRoute
+  '/emergency': typeof EmergencyRoute
   '/insights': typeof InsightsRoute
   '/api/search': typeof ApiSearchRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/availability' | '/chat' | '/insights' | '/api/search'
+  fullPaths:
+    | '/'
+    | '/availability'
+    | '/chat'
+    | '/emergency'
+    | '/insights'
+    | '/api/search'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/availability' | '/chat' | '/insights' | '/api/search'
-  id: '__root__' | '/' | '/availability' | '/chat' | '/insights' | '/api/search'
+  to:
+    | '/'
+    | '/availability'
+    | '/chat'
+    | '/emergency'
+    | '/insights'
+    | '/api/search'
+  id:
+    | '__root__'
+    | '/'
+    | '/availability'
+    | '/chat'
+    | '/emergency'
+    | '/insights'
+    | '/api/search'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AvailabilityRoute: typeof AvailabilityRoute
   ChatRoute: typeof ChatRoute
+  EmergencyRoute: typeof EmergencyRoute
   InsightsRoute: typeof InsightsRoute
   ApiSearchRoute: typeof ApiSearchRoute
 }
@@ -86,6 +115,13 @@ declare module '@tanstack/react-router' {
       path: '/insights'
       fullPath: '/insights'
       preLoaderRoute: typeof InsightsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/emergency': {
+      id: '/emergency'
+      path: '/emergency'
+      fullPath: '/emergency'
+      preLoaderRoute: typeof EmergencyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/chat': {
@@ -123,18 +159,10 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AvailabilityRoute: AvailabilityRoute,
   ChatRoute: ChatRoute,
+  EmergencyRoute: EmergencyRoute,
   InsightsRoute: InsightsRoute,
   ApiSearchRoute: ApiSearchRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}

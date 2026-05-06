@@ -1,5 +1,7 @@
 import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { AppSidebar, MobileNav } from "@/components/AppSidebar";
+import { LanguageProvider } from "@/lib/i18n";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 import appCss from "../styles.css?url";
 
@@ -68,10 +70,15 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   return (
-    <div className="flex min-h-screen w-full bg-background">
-      <AppSidebar />
-      <main className="flex-1 min-w-0 pb-20 md:pb-0"><Outlet /></main>
-      <MobileNav />
-    </div>
+    <LanguageProvider>
+      <div className="flex min-h-screen w-full bg-background">
+        <AppSidebar />
+        <main className="flex-1 min-w-0 pb-20 md:pb-0 relative">
+          <div className="absolute top-3 right-3 md:top-5 md:right-6 z-40"><LanguageSwitcher /></div>
+          <Outlet />
+        </main>
+        <MobileNav />
+      </div>
+    </LanguageProvider>
   );
 }
