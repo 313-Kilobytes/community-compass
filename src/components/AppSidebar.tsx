@@ -1,11 +1,13 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { LayoutGrid, Search, BarChart3, MessageCircle, Sparkles } from "lucide-react";
+import { LayoutGrid, Search, BarChart3, MessageCircle, Sparkles, Siren } from "lucide-react";
+import { useT } from "@/lib/i18n";
 
 const items = [
-  { title: "Resources", url: "/", icon: LayoutGrid },
-  { title: "Availability", url: "/availability", icon: Search },
-  { title: "Insights", url: "/insights", icon: BarChart3 },
-  { title: "Assistant", url: "/chat", icon: MessageCircle },
+  { title: "nav.resources" as const, url: "/", icon: LayoutGrid },
+  { title: "nav.availability" as const, url: "/availability", icon: Search },
+  { title: "nav.emergency" as const, url: "/emergency", icon: Siren },
+  { title: "nav.insights" as const, url: "/insights", icon: BarChart3 },
+  { title: "nav.assistant" as const, url: "/chat", icon: MessageCircle },
 ];
 
 export function AppSidebar() {
