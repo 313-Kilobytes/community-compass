@@ -12,7 +12,7 @@ const items = [
 
 export function AppSidebar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  return (
+  const { t } = useT();
     <aside className="hidden md:flex w-64 shrink-0 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border relative overflow-hidden">
       <div className="absolute inset-0 opacity-40 pointer-events-none" style={{ background: "radial-gradient(600px 300px at -20% -20%, color-mix(in oklab, var(--sidebar-primary) 35%, transparent), transparent 60%)" }} />
       <div className="relative px-5 py-6 flex items-center gap-3 border-b border-sidebar-border">
