@@ -19,6 +19,7 @@ const cache = new Map<string, { at: number; data: unknown }>();
 const TTL = 1000 * 60 * 10;
 
 export const Route = createFileRoute("/api/search")({
+  // @ts-expect-error - server handlers supported by TanStack Start plugin
   server: {
     handlers: {
       POST: async ({ request }: { request: Request }) => {
