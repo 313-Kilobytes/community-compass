@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { LayoutGrid, Search, BarChart3, MessageCircle, HeartHandshake } from "lucide-react";
+import { LayoutGrid, Search, BarChart3, MessageCircle, Sparkles } from "lucide-react";
 
 const items = [
   { title: "Resources", url: "/", icon: LayoutGrid },
@@ -11,37 +11,41 @@ const items = [
 export function AppSidebar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   return (
-    <aside className="hidden md:flex w-60 shrink-0 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
-      <div className="px-5 py-5 flex items-center gap-2 border-b border-sidebar-border">
-        <div className="h-9 w-9 rounded-lg bg-sidebar-primary text-sidebar-primary-foreground grid place-items-center">
-          <HeartHandshake className="h-5 w-5" />
+    <aside className="hidden md:flex w-64 shrink-0 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border relative overflow-hidden">
+      <div className="absolute inset-0 opacity-40 pointer-events-none" style={{ background: "radial-gradient(600px 300px at -20% -20%, color-mix(in oklab, var(--sidebar-primary) 35%, transparent), transparent 60%)" }} />
+      <div className="relative px-5 py-6 flex items-center gap-3 border-b border-sidebar-border">
+        <div className="h-10 w-10 rounded-xl grid place-items-center shadow-glow" style={{ background: "var(--gradient-primary)" }}>
+          <Sparkles className="h-5 w-5 text-white" />
         </div>
         <div>
-          <div className="font-semibold leading-tight">CommunityHub</div>
-          <div className="text-xs text-sidebar-foreground/60">Resource Intelligence</div>
+          <div className="font-display font-semibold text-base leading-tight">CommunityHub</div>
+          <div className="text-[11px] text-sidebar-foreground/60 tracking-wide uppercase">Resource Intel</div>
         </div>
       </div>
-      <nav className="flex-1 p-3 space-y-1">
+      <nav className="relative flex-1 p-3 space-y-1">
         {items.map((it) => {
           const active = pathname === it.url;
           return (
             <Link
               key={it.url}
               to={it.url}
-              className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
+              className={`group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
                 active
-                  ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                  : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  ? "bg-sidebar-primary/15 text-sidebar-primary-foreground border border-sidebar-primary/30"
+                  : "text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground border border-transparent"
               }`}
             >
-              <it.icon className="h-4 w-4" />
-              {it.title}
+              <span className={`h-8 w-8 grid place-items-center rounded-md transition-colors ${active ? "bg-sidebar-primary text-sidebar-primary-foreground" : "bg-sidebar-accent/40 text-sidebar-foreground/70 group-hover:bg-sidebar-accent"}`}>
+                <it.icon className="h-4 w-4" />
+              </span>
+              <span className="font-medium">{it.title}</span>
             </Link>
           );
         })}
       </nav>
-      <div className="p-4 text-xs text-sidebar-foreground/50 border-t border-sidebar-border">
-        Local-first · Cached · Lightweight
+      <div className="relative p-4 m-3 rounded-xl bg-sidebar-accent/40 border border-sidebar-border">
+        <div className="text-xs font-semibold text-sidebar-foreground/90">Local-first</div>
+        <div className="text-[11px] text-sidebar-foreground/60 mt-0.5">Cached results, minimal API usage.</div>
       </div>
     </aside>
   );
@@ -50,15 +54,15 @@ export function AppSidebar() {
 export function MobileNav() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   return (
-    <nav className="md:hidden fixed bottom-0 inset-x-0 bg-sidebar text-sidebar-foreground border-t border-sidebar-border flex justify-around py-2 z-50">
+    <nav className="md:hidden fixed bottom-3 inset-x-3 glass border border-border rounded-2xl shadow-elegant flex justify-around py-2 z-50">
       {items.map((it) => {
         const active = pathname === it.url;
         return (
           <Link
             key={it.url}
             to={it.url}
-            className={`flex flex-col items-center gap-0.5 px-3 py-1 text-[11px] ${
-              active ? "text-sidebar-primary" : "text-sidebar-foreground/70"
+            className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg text-[11px] transition-colors ${
+              active ? "text-primary" : "text-muted-foreground"
             }`}
           >
             <it.icon className="h-5 w-5" />
