@@ -22,39 +22,62 @@ type Offer = {
 const cache = new Map<string, { at: number; data: Offer[] }>();
 const TTL = 1000 * 60 * 15;
 
-const RAND_RE = /R\s?(\d{1,4}(?:[.,]\d{2})?)/i;
+// Match prices like "R 24.99", "R24,99", "ZAR 199.00"
+const PRICE_PATTERNS = [
+  /(?:R|ZAR)\s?(\d{1,4}(?:[.,]\d{2}))/gi,
+  /(?:R|ZAR)\s?(\d{1,4})(?!\d)/gi,
+];
 
-function extractPrice(text: string): { price: number | null; priceText: string | null } {
-  if (!text) return { price: null, priceText: null };
-  const m = text.match(RAND_RE);
-  if (!m) return { price: null, priceText: null };
-  const num = parseFloat(m[1].replace(",", "."));
-  return { price: isFinite(num) ? num : null, priceText: `R${m[1]}` };
+function extractPrices(text: string): number[] {
+  if (!text) return [];
+  const found: number[] = [];
+  for (const re of PRICE_PATTERNS) {
+    re.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
+      const n = parseFloat(m[1].replace(",", "."));
+      if (isFinite(n) && n >= 1 && n <= 9999) found.push(n);
+    }
+  }
+  return found;
 }
 
+function pickBestPrice(text: string): { price: number | null; priceText: string | null } {
+  const prices = extractPrices(text);
+  if (prices.length === 0) return { price: null, priceText: null };
+  // Prefer the lowest plausible price (often current/sale price appears first or smallest)
+  const min = Math.min(...prices);
+  return { price: min, priceText: `R${min.toFixed(2)}` };
+}
+
+type FCResult = { url: string; title: string; description?: string; markdown?: string };
+
 async function searchStore(apiKey: string, query: string, store: typeof STORES[number]): Promise<Offer[]> {
-  const q = `${query} price site:${store.site}`;
+  const q = `${query} site:${store.site}`;
   try {
     const res = await fetch("https://api.firecrawl.dev/v2/search", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ query: q, limit: 3 }),
+      body: JSON.stringify({
+        query: q,
+        limit: 2,
+        scrapeOptions: { formats: ["markdown"], onlyMainContent: true },
+      }),
     });
     if (!res.ok) return [];
     const json = (await res.json()) as {
-      data?: { web?: Array<{ url: string; title: string; description?: string }> } |
-        Array<{ url: string; title: string; description?: string }>;
+      data?: { web?: FCResult[] } | FCResult[];
     };
-    const arr = Array.isArray(json.data) ? json.data : json.data?.web ?? [];
+    const arr: FCResult[] = Array.isArray(json.data) ? json.data : json.data?.web ?? [];
     return arr.map((r) => {
-      const desc = r.description ?? "";
-      const { price, priceText } = extractPrice(`${r.title} ${desc}`);
+      const haystack = `${r.title} ${r.description ?? ""} ${r.markdown ?? ""}`;
+      const { price, priceText } = pickBestPrice(haystack);
       return {
         id: `${store.id}-${r.url}`,
         store: store.name,
         storeId: store.id,
         title: r.title,
-        description: desc,
+        description: r.description ?? "",
         url: r.url,
         price,
         priceText,
