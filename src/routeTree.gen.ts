@@ -10,15 +10,23 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as InsightsRouteImport } from './routes/insights'
+import { Route as GroceriesRouteImport } from './routes/groceries'
 import { Route as EmergencyRouteImport } from './routes/emergency'
 import { Route as ChatRouteImport } from './routes/chat'
+import { Route as CartRouteImport } from './routes/cart'
 import { Route as AvailabilityRouteImport } from './routes/availability'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiSearchRouteImport } from './routes/api/search'
+import { Route as ApiGroceriesRouteImport } from './routes/api/groceries'
 
 const InsightsRoute = InsightsRouteImport.update({
   id: '/insights',
   path: '/insights',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GroceriesRoute = GroceriesRouteImport.update({
+  id: '/groceries',
+  path: '/groceries',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EmergencyRoute = EmergencyRouteImport.update({
@@ -29,6 +37,11 @@ const EmergencyRoute = EmergencyRouteImport.update({
 const ChatRoute = ChatRouteImport.update({
   id: '/chat',
   path: '/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CartRoute = CartRouteImport.update({
+  id: '/cart',
+  path: '/cart',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AvailabilityRoute = AvailabilityRouteImport.update({
@@ -46,30 +59,44 @@ const ApiSearchRoute = ApiSearchRouteImport.update({
   path: '/api/search',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiGroceriesRoute = ApiGroceriesRouteImport.update({
+  id: '/api/groceries',
+  path: '/api/groceries',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/availability': typeof AvailabilityRoute
+  '/cart': typeof CartRoute
   '/chat': typeof ChatRoute
   '/emergency': typeof EmergencyRoute
+  '/groceries': typeof GroceriesRoute
   '/insights': typeof InsightsRoute
+  '/api/groceries': typeof ApiGroceriesRoute
   '/api/search': typeof ApiSearchRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/availability': typeof AvailabilityRoute
+  '/cart': typeof CartRoute
   '/chat': typeof ChatRoute
   '/emergency': typeof EmergencyRoute
+  '/groceries': typeof GroceriesRoute
   '/insights': typeof InsightsRoute
+  '/api/groceries': typeof ApiGroceriesRoute
   '/api/search': typeof ApiSearchRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/availability': typeof AvailabilityRoute
+  '/cart': typeof CartRoute
   '/chat': typeof ChatRoute
   '/emergency': typeof EmergencyRoute
+  '/groceries': typeof GroceriesRoute
   '/insights': typeof InsightsRoute
+  '/api/groceries': typeof ApiGroceriesRoute
   '/api/search': typeof ApiSearchRoute
 }
 export interface FileRouteTypes {
@@ -77,34 +104,46 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/availability'
+    | '/cart'
     | '/chat'
     | '/emergency'
+    | '/groceries'
     | '/insights'
+    | '/api/groceries'
     | '/api/search'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/availability'
+    | '/cart'
     | '/chat'
     | '/emergency'
+    | '/groceries'
     | '/insights'
+    | '/api/groceries'
     | '/api/search'
   id:
     | '__root__'
     | '/'
     | '/availability'
+    | '/cart'
     | '/chat'
     | '/emergency'
+    | '/groceries'
     | '/insights'
+    | '/api/groceries'
     | '/api/search'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AvailabilityRoute: typeof AvailabilityRoute
+  CartRoute: typeof CartRoute
   ChatRoute: typeof ChatRoute
   EmergencyRoute: typeof EmergencyRoute
+  GroceriesRoute: typeof GroceriesRoute
   InsightsRoute: typeof InsightsRoute
+  ApiGroceriesRoute: typeof ApiGroceriesRoute
   ApiSearchRoute: typeof ApiSearchRoute
 }
 
@@ -115,6 +154,13 @@ declare module '@tanstack/react-router' {
       path: '/insights'
       fullPath: '/insights'
       preLoaderRoute: typeof InsightsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/groceries': {
+      id: '/groceries'
+      path: '/groceries'
+      fullPath: '/groceries'
+      preLoaderRoute: typeof GroceriesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/emergency': {
@@ -129,6 +175,13 @@ declare module '@tanstack/react-router' {
       path: '/chat'
       fullPath: '/chat'
       preLoaderRoute: typeof ChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cart': {
+      id: '/cart'
+      path: '/cart'
+      fullPath: '/cart'
+      preLoaderRoute: typeof CartRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/availability': {
@@ -152,26 +205,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSearchRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/groceries': {
+      id: '/api/groceries'
+      path: '/api/groceries'
+      fullPath: '/api/groceries'
+      preLoaderRoute: typeof ApiGroceriesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AvailabilityRoute: AvailabilityRoute,
+  CartRoute: CartRoute,
   ChatRoute: ChatRoute,
   EmergencyRoute: EmergencyRoute,
+  GroceriesRoute: GroceriesRoute,
   InsightsRoute: InsightsRoute,
+  ApiGroceriesRoute: ApiGroceriesRoute,
   ApiSearchRoute: ApiSearchRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}
