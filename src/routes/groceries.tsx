@@ -9,10 +9,11 @@ type Offer = {
   store: string;
   storeId: string;
   title: string;
-  price: number | null;
-  priceText: string | null;
+  price: number;
+  priceText: string;
   url: string;
   description: string;
+  matchedQuery?: string;
 };
 
 export const Route = createFileRoute("/groceries")({
@@ -31,6 +32,7 @@ function GroceriesPage() {
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
   const [offers, setOffers] = useState<Offer[]>([]);
+  const [exactQuery, setExactQuery] = useState("");
   const [searched, setSearched] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,13 +49,14 @@ function GroceriesPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Search failed");
       setOffers(data.offers ?? []);
+      setExactQuery(data.exactQuery ?? q.trim());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Search failed");
       setOffers([]);
     } finally { setLoading(false); }
   };
 
-  const cheapest = offers.find((o) => o.price != null);
+  const cheapest = offers[0];
 
   return (
     <div className="px-4 md:px-10 py-8 md:py-10 max-w-7xl mx-auto">
@@ -110,8 +113,14 @@ function GroceriesPage() {
           <p className="text-muted-foreground">{t("groc.empty")}</p>
         </div>
       ) : offers.length === 0 ? (
-        <div className="text-center text-muted-foreground py-16">{t("groc.noResults")}</div>
+        <div className="text-center text-muted-foreground py-16">
+          No sourced prices found for "{exactQuery}". Try the exact product name shown on a retailer site.
+        </div>
       ) : (
+        <>
+        <div className="mb-4 rounded-xl border border-border bg-card p-3 text-sm text-muted-foreground">
+          Showing sourced prices that matched every word in <span className="font-semibold text-foreground">"{exactQuery}"</span>. Prices are extracted from the linked pages.
+        </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {offers.map((o) => {
             const isCheapest = cheapest && o.id === cheapest.id;
@@ -129,8 +138,8 @@ function GroceriesPage() {
                 </div>
                 <h3 className="font-display font-semibold text-base leading-snug line-clamp-2">{o.title}</h3>
                 <div className="mt-3 flex items-baseline gap-2">
-                  <span className="text-2xl font-bold tracking-tight tabular-nums">{o.priceText ?? "—"}</span>
-                  {!o.priceText && <span className="text-xs text-muted-foreground">{t("groc.checkSite")}</span>}
+                  <span className="text-2xl font-bold tracking-tight tabular-nums">{o.priceText}</span>
+                  <span className="text-xs text-muted-foreground">sourced</span>
                 </div>
                 {o.description && <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{o.description}</p>}
                 <div className="mt-auto pt-4 flex items-center gap-2">
@@ -149,6 +158,7 @@ function GroceriesPage() {
             );
           })}
         </div>
+        </>
       )}
     </div>
   );

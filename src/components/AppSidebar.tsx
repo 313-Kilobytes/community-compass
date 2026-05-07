@@ -1,9 +1,10 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { LayoutGrid, Search, BarChart3, MessageCircle, Sparkles, Siren, ShoppingBasket, ShoppingCart } from "lucide-react";
+import { LayoutGrid, Search, BarChart3, MessageCircle, Sparkles, Siren, ShoppingBasket, ShoppingCart, Newspaper } from "lucide-react";
 import { useT } from "@/lib/i18n";
 
 const items = [
   { title: "nav.resources" as const, url: "/", icon: LayoutGrid },
+  { title: "nav.feed" as const, url: "/feed", icon: Newspaper },
   { title: "nav.groceries" as const, url: "/groceries", icon: ShoppingBasket },
   { title: "nav.cart" as const, url: "/cart", icon: ShoppingCart },
   { title: "nav.availability" as const, url: "/availability", icon: Search },
@@ -24,7 +25,7 @@ export function AppSidebar() {
         </div>
         <div>
           <div className="font-display font-semibold text-base leading-tight">CommunityHub</div>
-          <div className="text-[11px] text-sidebar-foreground/60 tracking-wide uppercase">Resource Intel</div>
+          <div className="text-[11px] text-sidebar-foreground/60 tracking-wide uppercase">Crisis Intel</div>
         </div>
       </div>
       <nav className="relative flex-1 p-3 space-y-1">
@@ -49,8 +50,8 @@ export function AppSidebar() {
         })}
       </nav>
       <div className="relative p-4 m-3 rounded-xl bg-sidebar-accent/40 border border-sidebar-border">
-        <div className="text-xs font-semibold text-sidebar-foreground/90">Local-first</div>
-        <div className="text-[11px] text-sidebar-foreground/60 mt-0.5">Cached results, minimal API usage.</div>
+        <div className="text-xs font-semibold text-sidebar-foreground/90">AI crisis hub</div>
+        <div className="text-[11px] text-sidebar-foreground/60 mt-0.5">Alerts, resources, feed, and recommendations.</div>
       </div>
     </aside>
   );
@@ -60,14 +61,14 @@ export function MobileNav() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { t } = useT();
   return (
-    <nav className="md:hidden fixed bottom-3 inset-x-3 glass border border-border rounded-2xl shadow-elegant flex justify-around py-2 z-50">
+    <nav className="md:hidden fixed bottom-3 inset-x-3 glass border border-border rounded-2xl shadow-elegant flex gap-1 overflow-x-auto py-2 px-2 z-50">
       {items.map((it) => {
         const active = pathname === it.url;
         return (
           <Link
             key={it.url}
             to={it.url}
-            className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg text-[11px] transition-colors ${
+            className={`flex min-w-16 flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg text-[11px] transition-colors ${
               active ? "text-primary" : "text-muted-foreground"
             }`}
           >

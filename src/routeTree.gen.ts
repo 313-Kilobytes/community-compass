@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as InsightsRouteImport } from './routes/insights'
 import { Route as GroceriesRouteImport } from './routes/groceries'
+import { Route as FeedRouteImport } from './routes/feed'
 import { Route as EmergencyRouteImport } from './routes/emergency'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as CartRouteImport } from './routes/cart'
@@ -27,6 +28,11 @@ const InsightsRoute = InsightsRouteImport.update({
 const GroceriesRoute = GroceriesRouteImport.update({
   id: '/groceries',
   path: '/groceries',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FeedRoute = FeedRouteImport.update({
+  id: '/feed',
+  path: '/feed',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EmergencyRoute = EmergencyRouteImport.update({
@@ -71,6 +77,7 @@ export interface FileRoutesByFullPath {
   '/cart': typeof CartRoute
   '/chat': typeof ChatRoute
   '/emergency': typeof EmergencyRoute
+  '/feed': typeof FeedRoute
   '/groceries': typeof GroceriesRoute
   '/insights': typeof InsightsRoute
   '/api/groceries': typeof ApiGroceriesRoute
@@ -82,6 +89,7 @@ export interface FileRoutesByTo {
   '/cart': typeof CartRoute
   '/chat': typeof ChatRoute
   '/emergency': typeof EmergencyRoute
+  '/feed': typeof FeedRoute
   '/groceries': typeof GroceriesRoute
   '/insights': typeof InsightsRoute
   '/api/groceries': typeof ApiGroceriesRoute
@@ -94,6 +102,7 @@ export interface FileRoutesById {
   '/cart': typeof CartRoute
   '/chat': typeof ChatRoute
   '/emergency': typeof EmergencyRoute
+  '/feed': typeof FeedRoute
   '/groceries': typeof GroceriesRoute
   '/insights': typeof InsightsRoute
   '/api/groceries': typeof ApiGroceriesRoute
@@ -107,6 +116,7 @@ export interface FileRouteTypes {
     | '/cart'
     | '/chat'
     | '/emergency'
+    | '/feed'
     | '/groceries'
     | '/insights'
     | '/api/groceries'
@@ -118,6 +128,7 @@ export interface FileRouteTypes {
     | '/cart'
     | '/chat'
     | '/emergency'
+    | '/feed'
     | '/groceries'
     | '/insights'
     | '/api/groceries'
@@ -129,6 +140,7 @@ export interface FileRouteTypes {
     | '/cart'
     | '/chat'
     | '/emergency'
+    | '/feed'
     | '/groceries'
     | '/insights'
     | '/api/groceries'
@@ -141,6 +153,7 @@ export interface RootRouteChildren {
   CartRoute: typeof CartRoute
   ChatRoute: typeof ChatRoute
   EmergencyRoute: typeof EmergencyRoute
+  FeedRoute: typeof FeedRoute
   GroceriesRoute: typeof GroceriesRoute
   InsightsRoute: typeof InsightsRoute
   ApiGroceriesRoute: typeof ApiGroceriesRoute
@@ -161,6 +174,13 @@ declare module '@tanstack/react-router' {
       path: '/groceries'
       fullPath: '/groceries'
       preLoaderRoute: typeof GroceriesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/feed': {
+      id: '/feed'
+      path: '/feed'
+      fullPath: '/feed'
+      preLoaderRoute: typeof FeedRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/emergency': {
@@ -221,6 +241,7 @@ const rootRouteChildren: RootRouteChildren = {
   CartRoute: CartRoute,
   ChatRoute: ChatRoute,
   EmergencyRoute: EmergencyRoute,
+  FeedRoute: FeedRoute,
   GroceriesRoute: GroceriesRoute,
   InsightsRoute: InsightsRoute,
   ApiGroceriesRoute: ApiGroceriesRoute,
@@ -229,3 +250,12 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}

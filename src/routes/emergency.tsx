@@ -13,14 +13,14 @@ export const Route = createFileRoute("/emergency")({
 });
 
 const contacts = [
-  { key: "police", name: { en: "Police (SAPS)", xh: "Amapolisa (SAPS)", af: "Polisie (SAPS)" }, number: "10111", icon: Shield, cls: "bg-blue-500/15 text-blue-600" },
-  { key: "ambulance", name: { en: "Ambulance / Medical", xh: "I-Ambulensi / Ezonyango", af: "Ambulans / Mediese" }, number: "10177", icon: Ambulance, cls: "bg-red-500/15 text-red-600" },
-  { key: "fire", name: { en: "Fire Brigade", xh: "Abacimi-mlilo", af: "Brandweer" }, number: "10177", icon: Flame, cls: "bg-orange-500/15 text-orange-600" },
-  { key: "all", name: { en: "All Emergencies (cell)", xh: "Zonke Iingxamiseko (iselula)", af: "Alle Noodgevalle (sel)" }, number: "112", icon: AlertTriangle, cls: "bg-yellow-500/20 text-yellow-700" },
-  { key: "gbv", name: { en: "GBV Command Centre", xh: "Iziko le-GBV", af: "GBV Bevel Sentrum" }, number: "0800428428", icon: HeartPulse, cls: "bg-pink-500/15 text-pink-600" },
-  { key: "child", name: { en: "Childline SA", xh: "Childline SA", af: "Childline SA" }, number: "116", icon: Baby, cls: "bg-purple-500/15 text-purple-600" },
-  { key: "suicide", name: { en: "SADAG Suicide Crisis", xh: "I-SADAG Ingxaki Yokuzibulala", af: "SADAG Selfmoord Krisis" }, number: "0800567567", icon: HeartPulse, cls: "bg-rose-500/15 text-rose-600" },
-  { key: "disaster", name: { en: "Disaster Management", xh: "Ulawulo Lwentlekele", af: "Rampbestuur" }, number: "107", icon: Users, cls: "bg-emerald-500/15 text-emerald-600" },
+  { key: "police", name: { en: "Police (SAPS)", xh: "Amapolisa (SAPS)", zu: "Amaphoyisa (SAPS)", af: "Polisie (SAPS)" }, number: "10111", icon: Shield, cls: "bg-blue-500/15 text-blue-600" },
+  { key: "ambulance", name: { en: "Ambulance / Medical", xh: "I-Ambulensi / Ezonyango", zu: "I-ambulensi / Ezokwelapha", af: "Ambulans / Mediese" }, number: "10177", icon: Ambulance, cls: "bg-red-500/15 text-red-600" },
+  { key: "fire", name: { en: "Fire Brigade", xh: "Abacimi-mlilo", zu: "Abezicishamlilo", af: "Brandweer" }, number: "10177", icon: Flame, cls: "bg-orange-500/15 text-orange-600" },
+  { key: "all", name: { en: "All Emergencies (cell)", xh: "Zonke Iingxamiseko (iselula)", zu: "Zonke izimo eziphuthumayo (iselula)", af: "Alle Noodgevalle (sel)" }, number: "112", icon: AlertTriangle, cls: "bg-yellow-500/20 text-yellow-700" },
+  { key: "gbv", name: { en: "GBV Command Centre", xh: "Iziko le-GBV", zu: "Isikhungo se-GBV", af: "GBV Bevel Sentrum" }, number: "0800428428", icon: HeartPulse, cls: "bg-pink-500/15 text-pink-600" },
+  { key: "child", name: { en: "Childline SA", xh: "Childline SA", zu: "Childline SA", af: "Childline SA" }, number: "116", icon: Baby, cls: "bg-purple-500/15 text-purple-600" },
+  { key: "suicide", name: { en: "SADAG Suicide Crisis", xh: "I-SADAG Ingxaki Yokuzibulala", zu: "Inkinga Yokuzibulala ye-SADAG", af: "SADAG Selfmoord Krisis" }, number: "0800567567", icon: HeartPulse, cls: "bg-rose-500/15 text-rose-600" },
+  { key: "disaster", name: { en: "Disaster Management", xh: "Ulawulo Lwentlekele", zu: "Ukuphathwa Kwezinhlekelele", af: "Rampbestuur" }, number: "107", icon: Users, cls: "bg-emerald-500/15 text-emerald-600" },
 ];
 
 function EmergencyPage() {
