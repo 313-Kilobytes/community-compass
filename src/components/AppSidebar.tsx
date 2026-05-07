@@ -1,9 +1,11 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { LayoutGrid, Search, BarChart3, MessageCircle, Sparkles, Siren } from "lucide-react";
+import { LayoutGrid, Search, BarChart3, MessageCircle, Sparkles, Siren, ShoppingBasket, ShoppingCart } from "lucide-react";
 import { useT } from "@/lib/i18n";
 
 const items = [
   { title: "nav.resources" as const, url: "/", icon: LayoutGrid },
+  { title: "nav.groceries" as const, url: "/groceries", icon: ShoppingBasket },
+  { title: "nav.cart" as const, url: "/cart", icon: ShoppingCart },
   { title: "nav.availability" as const, url: "/availability", icon: Search },
   { title: "nav.emergency" as const, url: "/emergency", icon: Siren },
   { title: "nav.insights" as const, url: "/insights", icon: BarChart3 },

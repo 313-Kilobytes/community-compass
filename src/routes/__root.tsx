@@ -2,6 +2,7 @@ import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/r
 import { AppSidebar, MobileNav } from "@/components/AppSidebar";
 import { LanguageProvider } from "@/lib/i18n";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { CartProvider } from "@/lib/cart";
 
 import appCss from "../styles.css?url";
 
@@ -71,6 +72,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
 function RootComponent() {
   return (
     <LanguageProvider>
+      <CartProvider>
       <div className="flex min-h-screen w-full bg-background">
         <AppSidebar />
         <main className="flex-1 min-w-0 pb-20 md:pb-0 relative">
@@ -79,6 +81,7 @@ function RootComponent() {
         </main>
         <MobileNav />
       </div>
+      </CartProvider>
     </LanguageProvider>
   );
 }
