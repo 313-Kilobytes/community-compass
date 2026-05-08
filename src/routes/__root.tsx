@@ -87,12 +87,16 @@ function RootComponent() {
         <CartProvider>
           <div className="flex min-h-screen w-full bg-background">
             <AppSidebar />
-            <main className="flex-1 min-w-0 pb-20 md:pb-0 relative">
-              <div className="absolute top-3 right-3 md:top-5 md:right-6 z-40 flex items-center gap-2">
-                <ThemeToggle />
-                <LanguageSwitcher />
+            <main className="flex min-h-screen flex-1 flex-col min-w-0 pb-20 md:pb-0">
+              <div className="relative z-40 flex h-14 shrink-0 items-center justify-end px-3 md:h-16 md:px-6">
+                <div className="flex items-center gap-2">
+                  <ThemeToggle />
+                  <LanguageSwitcher />
+                </div>
               </div>
-              <Outlet />
+              <div className="min-h-0 flex-1">
+                <Outlet />
+              </div>
             </main>
             <MobileNav />
           </div>
