@@ -1,8 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Send, Trash2 } from "lucide-react";
+import { MapPin, Send, Trash2, UserRound } from "lucide-react";
 import { resources } from "@/data/resources";
 import { analyzeIncident } from "@/lib/crisis-intelligence";
+import {
+  ACTIVE_CHAT_STORAGE_KEY,
+  CHAT_SESSIONS_STORAGE_KEY,
+  FEED_STORAGE_KEY,
+  loadChatSessions,
+  readJson,
+  writeJson,
+  type CommunityChatMessage,
+  type CommunityChatSession,
+  type CommunityPost,
+} from "@/lib/community";
 
 export const Route = createFileRoute("/chat")({
   head: () => ({
@@ -14,24 +25,13 @@ export const Route = createFileRoute("/chat")({
   component: ChatPage,
 });
 
-interface Msg { role: "user" | "assistant"; text: string }
-type FeedPost = { area: string; message: string; image?: string; createdAt: string };
-
-const CHAT_STORAGE_KEY = "community-chat-history";
-const FEED_STORAGE_KEY = "community-feed-posts";
-
-const INTRO: Msg = {
+const INTRO: CommunityChatMessage = {
   role: "assistant",
   text: "Hi! I can use saved community posts and local resource data. Ask about an area, incident type, clinic, NGO, job, or outage.",
 };
 
-function loadFeedPosts(): FeedPost[] {
-  try {
-    const saved = localStorage.getItem(FEED_STORAGE_KEY);
-    return saved ? JSON.parse(saved) : [];
-  } catch {
-    return [];
-  }
+function loadSavedFeedPosts(): CommunityPost[] {
+  return readJson<CommunityPost[]>(FEED_STORAGE_KEY, []);
 }
 
 function retrieveResources(query: string) {
@@ -56,7 +56,7 @@ function reply(query: string): string {
   if (/^(hi|hello|hey)/.test(q)) return "Hello! What community information are you looking for?";
   if (q.includes("thank")) return "You're welcome. I saved this chat so you can come back to it.";
 
-  const feedHits = loadFeedPosts()
+  const feedHits = loadSavedFeedPosts()
     .map((post) => ({ post, analysis: analyzeIncident(post.message, Boolean(post.image)) }))
     .filter(({ post, analysis }) => {
       const hay = `${post.area} ${post.message} ${analysis.category} ${analysis.severity}`.toLowerCase();
@@ -81,22 +81,49 @@ function reply(query: string): string {
 }
 
 function ChatPage() {
-  const [messages, setMessages] = useState<Msg[]>([INTRO]);
+  const [sessionId, setSessionId] = useState("");
+  const [name, setName] = useState("Community member");
+  const [area, setArea] = useState("Central");
+  const [messages, setMessages] = useState<CommunityChatMessage[]>([INTRO]);
   const [input, setInput] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(CHAT_STORAGE_KEY);
-      if (saved) setMessages(JSON.parse(saved));
-    } catch {
-      setMessages([INTRO]);
+    const sessions = loadChatSessions();
+    const activeId = localStorage.getItem(ACTIVE_CHAT_STORAGE_KEY);
+    const active = sessions.find((session) => session.id === activeId) ?? sessions[0];
+    if (active) {
+      setSessionId(active.id);
+      setName(active.name);
+      setArea(active.area);
+      setMessages(active.messages.length ? active.messages : [INTRO]);
+      return;
     }
+    const id = crypto.randomUUID();
+    setSessionId(id);
+    localStorage.setItem(ACTIVE_CHAT_STORAGE_KEY, id);
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages));
-  }, [messages]);
+    if (!sessionId) return;
+    const now = new Date().toISOString();
+    const sessions = loadChatSessions();
+    const existing = sessions.find((session) => session.id === sessionId);
+    const nextSession: CommunityChatSession = {
+      id: sessionId,
+      name: name.trim() || "Community member",
+      area: area.trim() || "Central",
+      messages,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+    const next = [nextSession, ...sessions.filter((session) => session.id !== sessionId)]
+      .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+      .slice(0, 25);
+    writeJson(CHAT_SESSIONS_STORAGE_KEY, next);
+    localStorage.setItem(ACTIVE_CHAT_STORAGE_KEY, sessionId);
+    window.dispatchEvent(new Event("community-data"));
+  }, [area, messages, name, sessionId]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -106,12 +133,18 @@ function ChatPage() {
     e.preventDefault();
     const text = input.trim();
     if (!text) return;
-    const next: Msg[] = [...messages, { role: "user", text }];
+    const next: CommunityChatMessage[] = [...messages, { role: "user", text }];
     setMessages([...next, { role: "assistant", text: reply(text) }]);
     setInput("");
   };
 
   const clearHistory = () => setMessages([INTRO]);
+  const startNewChat = () => {
+    const id = crypto.randomUUID();
+    setSessionId(id);
+    setMessages([INTRO]);
+    localStorage.setItem(ACTIVE_CHAT_STORAGE_KEY, id);
+  };
   const suggestions = ["Water outage", "High priority alerts", "Clinic shortage", "My area"];
 
   return (
@@ -120,15 +153,44 @@ function ChatPage() {
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Community Assistant</h1>
-            <p className="text-muted-foreground text-sm">Saved chat history with answers from community posts and local resource data.</p>
+            <p className="text-muted-foreground text-sm">Saved chat history is shown on the community feed for other residents to learn from.</p>
           </div>
-          <button
-            type="button"
-            onClick={clearHistory}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-muted-foreground hover:text-destructive"
-          >
-            <Trash2 className="h-3.5 w-3.5" /> Clear
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={startNewChat}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground"
+            >
+              New chat
+            </button>
+            <button
+              type="button"
+              onClick={clearHistory}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-muted-foreground hover:text-destructive"
+            >
+              <Trash2 className="h-3.5 w-3.5" /> Clear
+            </button>
+          </div>
+        </div>
+        <div className="mt-4 grid sm:grid-cols-2 gap-2">
+          <label className="relative block">
+            <UserRound className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Your display name"
+              className="w-full pl-9 pr-3 py-2.5 rounded-lg bg-card border border-border text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </label>
+          <label className="relative block">
+            <MapPin className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={area}
+              onChange={(event) => setArea(event.target.value)}
+              placeholder="Area this chat is about"
+              className="w-full pl-9 pr-3 py-2.5 rounded-lg bg-card border border-border text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </label>
         </div>
       </header>
 

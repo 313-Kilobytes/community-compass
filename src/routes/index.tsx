@@ -14,8 +14,8 @@ import {
   Flame,
   Gauge,
   HeartHandshake,
+  LocateFixed,
   Loader2,
-  Map as MapIcon,
   MapPin,
   MessageCircle,
   Newspaper,
@@ -62,6 +62,14 @@ type HotspotRow = {
   icon: typeof AlertTriangle;
   left: number;
   top: number;
+};
+type NearbyPlace = {
+  id: string;
+  name: string;
+  type: string;
+  lat: number;
+  lng: number;
+  distance: number;
 };
 
 const filters: { key: "all" | Cat; tk: "filter.all" | "filter.clinic" | "filter.ngo" | "filter.job" | "filter.alert" }[] = [
@@ -122,6 +130,30 @@ function positionForArea(area: string, coords?: { lat: number; lng: number }) {
     left: 12 + (hash % 76),
     top: 14 + ((hash >> 3) % 70),
   };
+}
+
+function positionNear(origin: { lat: number; lng: number }, place: { lat: number; lng: number }) {
+  const latDelta = Math.max(-0.025, Math.min(0.025, place.lat - origin.lat));
+  const lngDelta = Math.max(-0.025, Math.min(0.025, place.lng - origin.lng));
+  return {
+    left: 50 + (lngDelta / 0.025) * 42,
+    top: 50 - (latDelta / 0.025) * 38,
+  };
+}
+
+function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  const toRad = (value: number) => (value * Math.PI) / 180;
+  const earthKm = 6371;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return earthKm * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+function placeType(tags: Record<string, string>) {
+  return tags.shop ?? tags.amenity ?? tags.tourism ?? tags.leisure ?? "place";
 }
 
 const resourcePages = [
@@ -196,6 +228,10 @@ function ResourcesPage() {
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
   const [feedPosts, setFeedPosts] = useState<FeedPost[]>([]);
+  const [mapOrigin, setMapOrigin] = useState({ lat: -33.9249, lng: 18.4241 });
+  const [nearbyPlaces, setNearbyPlaces] = useState<NearbyPlace[]>([]);
+  const [placesLoading, setPlacesLoading] = useState(false);
+  const [placesError, setPlacesError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadFeedPosts = () => {
@@ -288,6 +324,83 @@ function ResourcesPage() {
   }, [feedPosts]);
 
   const topIncident = dashboardIncidents[0];
+
+  const loadNearbyPlaces = (useBrowserLocation = true) => {
+    setPlacesLoading(true);
+    setPlacesError(null);
+
+    const fetchPlaces = async (origin: { lat: number; lng: number }) => {
+      setMapOrigin(origin);
+      const query = `
+        [out:json][timeout:20];
+        (
+          node(around:1800,${origin.lat},${origin.lng})[amenity];
+          node(around:1800,${origin.lat},${origin.lng})[shop];
+          node(around:1800,${origin.lat},${origin.lng})[tourism];
+          node(around:1800,${origin.lat},${origin.lng})[leisure];
+        );
+        out center 24;
+      `;
+      const response = await fetch("https://overpass-api.de/api/interpreter", {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=UTF-8" },
+        body: query,
+      });
+      if (!response.ok) throw new Error("Nearby places could not load.");
+      const data = (await response.json()) as {
+        elements?: Array<{ id: number; lat?: number; lon?: number; tags?: Record<string, string> }>;
+      };
+      const places = (data.elements ?? [])
+        .map((item) => {
+          const lat = item.lat;
+          const lng = item.lon;
+          const tags = item.tags ?? {};
+          const name = tags.name;
+          if (!name || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+          const point = { lat: lat!, lng: lng! };
+          return {
+            id: String(item.id),
+            name,
+            type: placeType(tags).replace(/_/g, " "),
+            lat: point.lat,
+            lng: point.lng,
+            distance: distanceKm(origin, point),
+          };
+        })
+        .filter((place): place is NearbyPlace => Boolean(place))
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, 10);
+      setNearbyPlaces(places);
+    };
+
+    const fallbackCapeTown = () => {
+      fetchPlaces({ lat: -33.9249, lng: 18.4241 })
+        .catch((error) => setPlacesError(error instanceof Error ? error.message : "Nearby places could not load."))
+        .finally(() => setPlacesLoading(false));
+    };
+
+    if (!useBrowserLocation || !navigator.geolocation) {
+      fallbackCapeTown();
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        fetchPlaces({
+          lat: Number(position.coords.latitude.toFixed(5)),
+          lng: Number(position.coords.longitude.toFixed(5)),
+        })
+          .catch((error) => setPlacesError(error instanceof Error ? error.message : "Nearby places could not load."))
+          .finally(() => setPlacesLoading(false));
+      },
+      () => fallbackCapeTown(),
+      { enableHighAccuracy: true, timeout: 8000 },
+    );
+  };
+
+  useEffect(() => {
+    loadNearbyPlaces(false);
+  }, []);
 
   const runSearch = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -452,12 +565,31 @@ function ResourcesPage() {
         <div className="bg-card border border-border rounded-2xl p-5 shadow-card">
           <div className="flex items-center justify-between gap-3 mb-4">
             <div>
-              <h2 className="font-display text-xl font-bold tracking-tight">Hotspot map</h2>
-              <p className="text-sm text-muted-foreground mt-1">Risk clusters by area.</p>
+              <h2 className="font-display text-xl font-bold tracking-tight">Cape Town nearby map</h2>
+              <p className="text-sm text-muted-foreground mt-1">Places around your location and active risk clusters.</p>
             </div>
-            <MapIcon className="h-5 w-5 text-primary" />
+            <button
+              type="button"
+              onClick={() => loadNearbyPlaces(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-secondary px-3 py-2 text-xs font-semibold text-secondary-foreground hover:bg-muted"
+            >
+              <LocateFixed className="h-3.5 w-3.5" /> Near me
+            </button>
           </div>
           <div className="relative h-52 overflow-hidden rounded-xl border border-border bg-[linear-gradient(135deg,rgba(15,23,42,.08),rgba(15,23,42,.02))]">
+            <div className="absolute inset-0 opacity-25 [background-image:linear-gradient(to_right,currentColor_1px,transparent_1px),linear-gradient(to_bottom,currentColor_1px,transparent_1px)] [background-size:32px_32px]" />
+            <div className="absolute left-1/2 top-1/2 z-10 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary ring-8 ring-primary/20" title="Current map center" />
+            {nearbyPlaces.map((place) => {
+              const point = positionNear(mapOrigin, place);
+              return (
+                <div
+                  key={place.id}
+                  className="absolute z-10 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-500 ring-4 ring-emerald-500/20"
+                  style={{ left: `${point.left}%`, top: `${point.top}%` }}
+                  title={`${place.name}: ${place.type}`}
+                />
+              );
+            })}
             {hotspotRows.map((row) => (
               <div
                 key={row.area}
@@ -466,13 +598,36 @@ function ResourcesPage() {
                 title={`${row.area}: ${row.issue}`}
               />
             ))}
-            <div className="absolute inset-0 opacity-25 [background-image:linear-gradient(to_right,currentColor_1px,transparent_1px),linear-gradient(to_bottom,currentColor_1px,transparent_1px)] [background-size:32px_32px]" />
-            {hotspotRows.length === 0 && (
+            {placesLoading && (
+              <div className="absolute inset-0 grid place-items-center bg-card/55 text-sm text-muted-foreground">
+                Loading nearby Cape Town places...
+              </div>
+            )}
+            {!placesLoading && nearbyPlaces.length === 0 && hotspotRows.length === 0 && (
               <div className="absolute inset-0 grid place-items-center px-6 text-center text-sm text-muted-foreground">
-                Hotspots appear after feed posts include an area or neighborhood.
+                Nearby places load from Cape Town by default. Use Near me to center on your location.
               </div>
             )}
           </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-primary" /> map center</span>
+            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> nearby place</span>
+            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-red-500" /> hotspot</span>
+          </div>
+          {placesError && <div className="mt-3 rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs text-destructive">{placesError}</div>}
+          {nearbyPlaces.length > 0 && (
+            <div className="mt-4 space-y-2">
+              {nearbyPlaces.slice(0, 5).map((place) => (
+                <div key={place.id} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background/60 px-3 py-2 text-sm">
+                  <span className="inline-flex min-w-0 items-center gap-2">
+                    <MapPin className="h-3.5 w-3.5 shrink-0 text-primary" />
+                    <span className="truncate font-medium">{place.name}</span>
+                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground">{place.type} · {place.distance.toFixed(1)} km</span>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="mt-4 space-y-3">
             {hotspotRows.map((row) => {
               const Icon = row.icon;

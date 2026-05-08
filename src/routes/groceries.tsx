@@ -1,8 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
-import { Search, Loader2, ShoppingCart, ExternalLink, Plus, Tag, Store } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Search, Loader2, ShoppingCart, ExternalLink, Plus, Tag, Store, Clock, Trash2 } from "lucide-react";
 import { useCart } from "@/lib/cart";
 import { useT } from "@/lib/i18n";
+
+type StoreHours = {
+  summary: string;
+  today?: string;
+  source: string;
+  status: "open" | "closed" | "closing-soon" | "unknown";
+  statusLabel: string;
+};
 
 type Offer = {
   id: string;
@@ -14,7 +22,10 @@ type Offer = {
   url: string;
   description: string;
   matchedQuery?: string;
+  operatingHours?: StoreHours;
 };
+
+const GROCERY_SEARCH_STORAGE_KEY = "community-grocery-search";
 
 export const Route = createFileRoute("/groceries")({
   head: () => ({
@@ -36,6 +47,33 @@ function GroceriesPage() {
   const [searched, setSearched] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(GROCERY_SEARCH_STORAGE_KEY);
+      if (!saved) return;
+      const data = JSON.parse(saved) as { q?: string; exactQuery?: string; offers?: Offer[]; searched?: boolean };
+      setQ(data.q ?? "");
+      setExactQuery(data.exactQuery ?? "");
+      setOffers(data.offers ?? []);
+      setSearched(Boolean(data.searched));
+    } catch {
+      localStorage.removeItem(GROCERY_SEARCH_STORAGE_KEY);
+    }
+  }, []);
+
+  const saveSearchState = (next: { q: string; exactQuery: string; offers: Offer[]; searched: boolean }) => {
+    localStorage.setItem(GROCERY_SEARCH_STORAGE_KEY, JSON.stringify(next));
+  };
+
+  const clearSearch = () => {
+    setQ("");
+    setOffers([]);
+    setExactQuery("");
+    setSearched(false);
+    setError(null);
+    localStorage.removeItem(GROCERY_SEARCH_STORAGE_KEY);
+  };
+
   const run = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!q.trim()) return;
@@ -48,8 +86,11 @@ function GroceriesPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Search failed");
-      setOffers(data.offers ?? []);
-      setExactQuery(data.exactQuery ?? q.trim());
+      const nextOffers = data.offers ?? [];
+      const nextExactQuery = data.exactQuery ?? q.trim();
+      setOffers(nextOffers);
+      setExactQuery(nextExactQuery);
+      saveSearchState({ q: q.trim(), exactQuery: nextExactQuery, offers: nextOffers, searched: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Search failed");
       setOffers([]);
@@ -91,6 +132,11 @@ function GroceriesPage() {
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
           {t("groc.compare")}
         </button>
+        {searched && (
+          <button type="button" onClick={clearSearch} className="px-4 py-3 rounded-xl bg-secondary text-secondary-foreground text-sm font-semibold hover:bg-muted inline-flex items-center justify-center gap-2">
+            <Trash2 className="h-4 w-4" /> Clear
+          </button>
+        )}
       </form>
 
       {error && <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm border border-destructive/20">{error}</div>}
@@ -124,6 +170,7 @@ function GroceriesPage() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {offers.map((o) => {
             const isCheapest = cheapest && o.id === cheapest.id;
+            const statusClass = hoursStatusClass(o.operatingHours?.status);
             return (
               <div key={o.id} className={`group bg-card text-card-foreground rounded-2xl border p-5 hover:shadow-elegant hover:-translate-y-0.5 transition-all flex flex-col ${isCheapest ? "border-success/60" : "border-border hover:border-primary/30"}`}>
                 <div className="flex items-start justify-between gap-3 mb-3">
@@ -136,11 +183,31 @@ function GroceriesPage() {
                     </span>
                   )}
                 </div>
+                {o.operatingHours && (
+                  <div className="mb-3">
+                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase ${statusClass}`}>
+                      {o.operatingHours.status === "closing-soon" ? "Closing soon" : o.operatingHours.status}
+                    </span>
+                  </div>
+                )}
                 <h3 className="font-display font-semibold text-base leading-snug line-clamp-2">{o.title}</h3>
                 <div className="mt-3 flex items-baseline gap-2">
                   <span className="text-2xl font-bold tracking-tight tabular-nums">{o.priceText}</span>
                   <span className="text-xs text-muted-foreground">sourced</span>
                 </div>
+                {o.operatingHours && (
+                  <div className="mt-3 rounded-xl border border-border bg-secondary/35 px-3 py-2 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-1.5 font-semibold text-foreground">
+                      <Clock className="h-3.5 w-3.5 text-primary" /> Operating hours
+                    </div>
+                    <p className="mt-1">{o.operatingHours.statusLabel}</p>
+                    <p className="mt-0.5">{o.operatingHours.today ?? o.operatingHours.summary}</p>
+                    <p className="mt-0.5 line-clamp-2">{o.operatingHours.summary}</p>
+                    <a href={o.operatingHours.source} target="_blank" rel="noreferrer noopener" className="mt-1 inline-flex items-center gap-1 font-semibold text-primary hover:underline">
+                      Verify hours <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </div>
+                )}
                 {o.description && <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{o.description}</p>}
                 <div className="mt-auto pt-4 flex items-center gap-2">
                   <button
@@ -162,4 +229,11 @@ function GroceriesPage() {
       )}
     </div>
   );
+}
+
+function hoursStatusClass(status?: StoreHours["status"]) {
+  if (status === "open") return "bg-emerald-500 text-white";
+  if (status === "closed") return "bg-red-500 text-white";
+  if (status === "closing-soon") return "bg-orange-400 text-orange-950";
+  return "bg-secondary text-secondary-foreground border border-border";
 }
