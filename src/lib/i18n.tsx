@@ -12,6 +12,7 @@ const dict = {
     "nav.emergency": "Emergency",
     "nav.groceries": "Groceries",
     "nav.cart": "Cart",
+    "nav.profile": "Profile",
     "lang.label": "Language",
     "theme.dark": "Dark mode",
     "theme.light": "Light mode",
