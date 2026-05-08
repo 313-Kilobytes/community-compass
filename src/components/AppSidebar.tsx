@@ -9,6 +9,7 @@ import {
   ShoppingBasket,
   ShoppingCart,
   Newspaper,
+  UserRound,
 } from "lucide-react";
 import { useT } from "@/lib/i18n";
 

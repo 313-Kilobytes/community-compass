@@ -33,9 +33,16 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 async function readAuthResponse(response: Response) {
-  const data = (await response.json().catch(() => ({}))) as { user?: UserProfile; error?: string };
-  if (!response.ok) throw new Error(data.error || "Authentication request failed.");
-  return data.user ?? null;
+  try {
+    const data = (await response.json().catch(() => ({}))) as { user?: UserProfile; error?: string };
+    if (!response.ok) {
+      throw new Error(data.error || `Authentication request failed with status ${response.status}.`);
+    }
+    return data.user ?? null;
+  } catch (error) {
+    if (error instanceof Error) throw error;
+    throw new Error(`Authentication request failed with status ${response.status}.`);
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
