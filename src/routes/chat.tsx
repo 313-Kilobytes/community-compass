@@ -1,239 +1,183 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { MapPin, Send, Trash2, UserRound } from "lucide-react";
-import { resources } from "@/data/resources";
-import { analyzeIncident } from "@/lib/crisis-intelligence";
-import {
-  ACTIVE_CHAT_STORAGE_KEY,
-  CHAT_SESSIONS_STORAGE_KEY,
-  FEED_STORAGE_KEY,
-  loadChatSessions,
-  readJson,
-  writeJson,
-  type CommunityChatMessage,
-  type CommunityChatSession,
-  type CommunityPost,
-} from "@/lib/community";
+import { Bot, ExternalLink, Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/chat")({
   head: () => ({
     meta: [
       { title: "Assistant - CommunityHub" },
-      { name: "description", content: "Ask the community assistant about saved posts, clinics, NGOs, jobs and alerts." },
+      { name: "description", content: "Chat with the CommunityHub assistant." },
     ],
   }),
   component: ChatPage,
 });
 
-const INTRO: CommunityChatMessage = {
-  role: "assistant",
-  text: "Hi! I can use saved community posts and local resource data. Ask about an area, incident type, clinic, NGO, job, or outage.",
+type VoiceflowChat = {
+  load: (config: VoiceflowConfig) => Promise<void> | void;
+  open?: () => void;
+  close?: () => void;
+  destroy?: () => void;
 };
 
-function loadSavedFeedPosts(): CommunityPost[] {
-  return readJson<CommunityPost[]>(FEED_STORAGE_KEY, []);
+type VoiceflowConfig = {
+  verify: { projectID: string };
+  url: string;
+  versionID?: string;
+  voice?: { url: string };
+  render?: {
+    mode: "embedded" | "overlay";
+    target?: HTMLElement | null;
+  };
+  assistant?: {
+    title?: string;
+    description?: string;
+    color?: string;
+    persistence?: "localStorage" | "sessionStorage" | "memory";
+  };
+};
+
+declare global {
+  interface Window {
+    voiceflow?: {
+      chat?: VoiceflowChat;
+    };
+  }
 }
 
-function retrieveResources(query: string) {
-  const q = query.toLowerCase();
-  const tokens = q.split(/\s+/).filter((t) => t.length > 2);
-  const scored = resources
-    .map((r) => {
-      const hay = `${r.name} ${r.description} ${r.location} ${r.tags.join(" ")} ${r.type}`.toLowerCase();
-      let score = 0;
-      for (const token of tokens) if (hay.includes(token)) score++;
-      if (q.includes(r.type)) score += 2;
-      return { r, score };
-    })
-    .filter((item) => item.score > 0)
-    .sort((a, b) => b.score - a.score);
-  return scored.slice(0, 3).map((item) => item.r);
-}
+const VOICEFLOW_SCRIPT_ID = "voiceflow-webchat";
+const VOICEFLOW_SCRIPT_SRC = "https://cdn.voiceflow.com/widget-next/bundle.mjs";
+const VOICEFLOW_PROJECT_ID = import.meta.env.VITE_VOICEFLOW_PROJECT_ID ?? "69fd9a85370afbde9ec3224c";
+const VOICEFLOW_VERSION_ID = import.meta.env.VITE_VOICEFLOW_VERSION_ID;
 
-function reply(query: string): string {
-  const q = query.toLowerCase().trim();
-  if (!q) return "Please type a question.";
-  if (/^(hi|hello|hey)/.test(q)) return "Hello! What community information are you looking for?";
-  if (q.includes("thank")) return "You're welcome. I saved this chat so you can come back to it.";
+function loadVoiceflowScript() {
+  const existingScript = document.getElementById(VOICEFLOW_SCRIPT_ID);
 
-  const feedHits = loadSavedFeedPosts()
-    .map((post) => ({ post, analysis: analyzeIncident(post.message, Boolean(post.image)) }))
-    .filter(({ post, analysis }) => {
-      const hay = `${post.area} ${post.message} ${analysis.category} ${analysis.severity}`.toLowerCase();
-      return q.split(/\s+/).some((token) => token.length > 2 && hay.includes(token));
-    })
-    .slice(0, 3);
-
-  if (feedHits.length > 0) {
-    return feedHits
-      .map(({ post, analysis }) => `${analysis.severity} ${analysis.category} in ${post.area}: ${analysis.summary} Recommended action: ${analysis.action}`)
-      .join("\n\n");
+  if (existingScript) {
+    return Promise.resolve();
   }
 
-  const hits = retrieveResources(q);
-  if (hits.length === 0) {
-    return "I couldn't find a match in saved community posts or local resource data. Try a specific area, incident type, clinic, NGO, job, or outage keyword.";
-  }
-
-  const top = hits[0];
-  const more = hits.slice(1).map((r) => r.name).join(", ");
-  return `Try ${top.name}: ${top.description} (${top.location}).${more ? ` Also: ${more}.` : ""}`;
+  return new Promise<void>((resolve, reject) => {
+    const script = document.createElement("script");
+    script.id = VOICEFLOW_SCRIPT_ID;
+    script.src = VOICEFLOW_SCRIPT_SRC;
+    script.type = "text/javascript";
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Unable to load the Voiceflow webchat script."));
+    document.body.appendChild(script);
+  });
 }
 
 function ChatPage() {
-  const [sessionId, setSessionId] = useState("");
-  const [name, setName] = useState("Community member");
-  const [area, setArea] = useState("Central");
-  const [messages, setMessages] = useState<CommunityChatMessage[]>([INTRO]);
-  const [input, setInput] = useState("");
-  const endRef = useRef<HTMLDivElement>(null);
+  const chatTargetRef = useRef<HTMLDivElement>(null);
+  const [status, setStatus] = useState<"loading" | "ready" | "error" | "missing-project">(
+    VOICEFLOW_PROJECT_ID ? "loading" : "missing-project",
+  );
 
   useEffect(() => {
-    const sessions = loadChatSessions();
-    const activeId = localStorage.getItem(ACTIVE_CHAT_STORAGE_KEY);
-    const active = sessions.find((session) => session.id === activeId) ?? sessions[0];
-    if (active) {
-      setSessionId(active.id);
-      setName(active.name);
-      setArea(active.area);
-      setMessages(active.messages.length ? active.messages : [INTRO]);
-      return;
+    if (!VOICEFLOW_PROJECT_ID) return;
+
+    let cancelled = false;
+
+    async function initializeVoiceflow() {
+      try {
+        await loadVoiceflowScript();
+
+        if (cancelled) return;
+
+        const config: VoiceflowConfig = {
+          verify: { projectID: VOICEFLOW_PROJECT_ID },
+          url: "https://general-runtime.voiceflow.com",
+          voice: { url: "https://runtime-api.voiceflow.com" },
+          render: {
+            mode: "embedded",
+            target: chatTargetRef.current,
+          },
+          assistant: {
+            title: "CommunityHub Assistant",
+            description: "Ask about clinics, NGOs, alerts, and local support.",
+            color: "#7C3AED",
+            persistence: "localStorage",
+          },
+        };
+
+        if (VOICEFLOW_VERSION_ID) {
+          config.versionID = VOICEFLOW_VERSION_ID;
+        }
+
+        await window.voiceflow?.chat?.load(config);
+        setStatus("ready");
+      } catch {
+        if (!cancelled) setStatus("error");
+      }
     }
-    const id = crypto.randomUUID();
-    setSessionId(id);
-    localStorage.setItem(ACTIVE_CHAT_STORAGE_KEY, id);
+
+    initializeVoiceflow();
+
+    return () => {
+      cancelled = true;
+      window.voiceflow?.chat?.close?.();
+    };
   }, []);
 
-  useEffect(() => {
-    if (!sessionId) return;
-    const now = new Date().toISOString();
-    const sessions = loadChatSessions();
-    const existing = sessions.find((session) => session.id === sessionId);
-    const nextSession: CommunityChatSession = {
-      id: sessionId,
-      name: name.trim() || "Community member",
-      area: area.trim() || "Central",
-      messages,
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now,
-    };
-    const next = [nextSession, ...sessions.filter((session) => session.id !== sessionId)]
-      .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
-      .slice(0, 25);
-    writeJson(CHAT_SESSIONS_STORAGE_KEY, next);
-    localStorage.setItem(ACTIVE_CHAT_STORAGE_KEY, sessionId);
-    window.dispatchEvent(new Event("community-data"));
-  }, [area, messages, name, sessionId]);
-
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  const send = (e: React.FormEvent) => {
-    e.preventDefault();
-    const text = input.trim();
-    if (!text) return;
-    const next: CommunityChatMessage[] = [...messages, { role: "user", text }];
-    setMessages([...next, { role: "assistant", text: reply(text) }]);
-    setInput("");
-  };
-
-  const clearHistory = () => setMessages([INTRO]);
-  const startNewChat = () => {
-    const id = crypto.randomUUID();
-    setSessionId(id);
-    setMessages([INTRO]);
-    localStorage.setItem(ACTIVE_CHAT_STORAGE_KEY, id);
-  };
-  const suggestions = ["Water outage", "High priority alerts", "Clinic shortage", "My area"];
-
   return (
-    <div className="flex flex-col h-[calc(100vh-0px)] md:h-screen max-w-3xl mx-auto px-4 md:px-8 py-6">
-      <header className="mb-4">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Community Assistant</h1>
-            <p className="text-muted-foreground text-sm">Saved chat history is shown on the community feed for other residents to learn from.</p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={startNewChat}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground"
-            >
-              New chat
-            </button>
-            <button
-              type="button"
-              onClick={clearHistory}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-muted-foreground hover:text-destructive"
-            >
-              <Trash2 className="h-3.5 w-3.5" /> Clear
-            </button>
-          </div>
+    <div className="mx-auto flex h-[calc(100vh-5rem)] max-w-4xl flex-col overflow-hidden px-4 py-6 md:h-screen md:px-8">
+      <header className="mb-6 shrink-0 pr-24">
+        <div className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+          <Bot className="h-5 w-5" />
         </div>
-        <div className="mt-4 grid sm:grid-cols-2 gap-2">
-          <label className="relative block">
-            <UserRound className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="Your display name"
-              className="w-full pl-9 pr-3 py-2.5 rounded-lg bg-card border border-border text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </label>
-          <label className="relative block">
-            <MapPin className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={area}
-              onChange={(event) => setArea(event.target.value)}
-              placeholder="Area this chat is about"
-              className="w-full pl-9 pr-3 py-2.5 rounded-lg bg-card border border-border text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </label>
-        </div>
+        <h1 className="mt-4 text-2xl font-bold tracking-tight md:text-3xl">Community Assistant</h1>
+        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+          Chat with the CommunityHub Voiceflow assistant for local resource guidance.
+        </p>
       </header>
 
-      <div className="flex-1 min-h-0 overflow-y-auto bg-card border border-border rounded-xl p-4 space-y-3">
-        {messages.map((message, index) => (
-          <div key={index} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-            <div
-              className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm ${
-                message.role === "user"
-                  ? "bg-primary text-primary-foreground rounded-br-sm"
-                  : "bg-secondary text-secondary-foreground rounded-bl-sm"
-              }`}
-            >
-              {message.text}
+      <section className="voiceflow-light-surface relative flex min-h-0 flex-1 overflow-hidden rounded-lg border border-border bg-white text-slate-950">
+        <div ref={chatTargetRef} className="h-full min-h-0 w-full overflow-hidden" />
+
+        {status === "loading" && (
+          <div className="absolute inset-0 flex items-center justify-center bg-card p-6 text-center">
+            <div className="max-w-sm">
+              <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+              <h2 className="mt-4 text-lg font-semibold">Loading assistant</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                The Voiceflow chat will open here in a moment.
+              </p>
             </div>
           </div>
-        ))}
-        <div ref={endRef} />
-      </div>
+        )}
 
-      <div className="flex flex-wrap gap-2 mt-3">
-        {suggestions.map((suggestion) => (
-          <button
-            key={suggestion}
-            onClick={() => setInput(suggestion)}
-            className="text-xs px-2.5 py-1 rounded-full bg-secondary text-secondary-foreground hover:bg-muted"
-          >
-            {suggestion}
-          </button>
-        ))}
-      </div>
+        {status === "missing-project" && (
+          <div className="absolute inset-0 flex items-center justify-center bg-card p-6 text-center">
+            <div className="max-w-md">
+              <h2 className="text-lg font-semibold">Add your Voiceflow project ID</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Set <code className="rounded bg-muted px-1.5 py-0.5">VITE_VOICEFLOW_PROJECT_ID</code> in your local
+                environment, then restart the dev server.
+              </p>
+            </div>
+          </div>
+        )}
 
-      <form onSubmit={send} className="mt-3 flex gap-2">
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask about saved reports or resources..."
-          className="flex-1 px-4 py-2.5 rounded-lg bg-card border border-border text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-        />
-        <button className="px-4 py-2.5 rounded-lg bg-primary text-primary-foreground hover:opacity-90 inline-flex items-center gap-1.5 text-sm font-medium">
-          <Send className="h-4 w-4" /> Send
-        </button>
-      </form>
+        {status === "error" && (
+          <div className="absolute inset-0 flex items-center justify-center bg-card p-6 text-center">
+            <div className="max-w-md">
+              <h2 className="text-lg font-semibold">Assistant could not load</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Check the Voiceflow project ID, approved domains, and network access.
+              </p>
+              <a
+                href="https://docs.voiceflow.com/docs/proactive-messages"
+                target="_blank"
+                rel="noreferrer"
+                className="mt-4 inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+              >
+                Voiceflow docs
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            </div>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

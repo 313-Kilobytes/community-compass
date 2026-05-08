@@ -1,10 +1,9 @@
-import { MapPin, Phone, Calendar, Stethoscope, HeartHandshake, Briefcase, AlertTriangle } from "lucide-react";
+import { MapPin, Phone, Calendar, Stethoscope, HeartHandshake, AlertTriangle } from "lucide-react";
 import type { Resource, ResourceType } from "@/data/resources";
 
 const typeMeta: Record<ResourceType, { label: string; icon: typeof MapPin; cls: string }> = {
   clinic: { label: "Clinic", icon: Stethoscope, cls: "bg-primary/10 text-primary" },
   ngo: { label: "NGO", icon: HeartHandshake, cls: "bg-success/15 text-[color:var(--success)]" },
-  job: { label: "Job", icon: Briefcase, cls: "bg-accent/20 text-accent-foreground" },
   alert: { label: "Alert", icon: AlertTriangle, cls: "bg-warning/20 text-[color:var(--foreground)]" },
 };
 
