@@ -9,6 +9,9 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SignupRouteImport } from './routes/signup'
+import { Route as SigninRouteImport } from './routes/signin'
+import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as InsightsRouteImport } from './routes/insights'
 import { Route as GroceriesRouteImport } from './routes/groceries'
 import { Route as FeedRouteImport } from './routes/feed'
@@ -19,7 +22,26 @@ import { Route as AvailabilityRouteImport } from './routes/availability'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiSearchRouteImport } from './routes/api/search'
 import { Route as ApiGroceriesRouteImport } from './routes/api/groceries'
+import { Route as ApiAuthSignupRouteImport } from './routes/api/auth/signup'
+import { Route as ApiAuthProfileRouteImport } from './routes/api/auth/profile'
+import { Route as ApiAuthLogoutRouteImport } from './routes/api/auth/logout'
+import { Route as ApiAuthLoginRouteImport } from './routes/api/auth/login'
 
+const SignupRoute = SignupRouteImport.update({
+  id: '/signup',
+  path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SigninRoute = SigninRouteImport.update({
+  id: '/signin',
+  path: '/signin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProfileRoute = ProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const InsightsRoute = InsightsRouteImport.update({
   id: '/insights',
   path: '/insights',
@@ -70,6 +92,26 @@ const ApiGroceriesRoute = ApiGroceriesRouteImport.update({
   path: '/api/groceries',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAuthSignupRoute = ApiAuthSignupRouteImport.update({
+  id: '/api/auth/signup',
+  path: '/api/auth/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthProfileRoute = ApiAuthProfileRouteImport.update({
+  id: '/api/auth/profile',
+  path: '/api/auth/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthLogoutRoute = ApiAuthLogoutRouteImport.update({
+  id: '/api/auth/logout',
+  path: '/api/auth/logout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthLoginRoute = ApiAuthLoginRouteImport.update({
+  id: '/api/auth/login',
+  path: '/api/auth/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -80,8 +122,15 @@ export interface FileRoutesByFullPath {
   '/feed': typeof FeedRoute
   '/groceries': typeof GroceriesRoute
   '/insights': typeof InsightsRoute
+  '/profile': typeof ProfileRoute
+  '/signin': typeof SigninRoute
+  '/signup': typeof SignupRoute
   '/api/groceries': typeof ApiGroceriesRoute
   '/api/search': typeof ApiSearchRoute
+  '/api/auth/login': typeof ApiAuthLoginRoute
+  '/api/auth/logout': typeof ApiAuthLogoutRoute
+  '/api/auth/profile': typeof ApiAuthProfileRoute
+  '/api/auth/signup': typeof ApiAuthSignupRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -92,8 +141,15 @@ export interface FileRoutesByTo {
   '/feed': typeof FeedRoute
   '/groceries': typeof GroceriesRoute
   '/insights': typeof InsightsRoute
+  '/profile': typeof ProfileRoute
+  '/signin': typeof SigninRoute
+  '/signup': typeof SignupRoute
   '/api/groceries': typeof ApiGroceriesRoute
   '/api/search': typeof ApiSearchRoute
+  '/api/auth/login': typeof ApiAuthLoginRoute
+  '/api/auth/logout': typeof ApiAuthLogoutRoute
+  '/api/auth/profile': typeof ApiAuthProfileRoute
+  '/api/auth/signup': typeof ApiAuthSignupRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -105,8 +161,15 @@ export interface FileRoutesById {
   '/feed': typeof FeedRoute
   '/groceries': typeof GroceriesRoute
   '/insights': typeof InsightsRoute
+  '/profile': typeof ProfileRoute
+  '/signin': typeof SigninRoute
+  '/signup': typeof SignupRoute
   '/api/groceries': typeof ApiGroceriesRoute
   '/api/search': typeof ApiSearchRoute
+  '/api/auth/login': typeof ApiAuthLoginRoute
+  '/api/auth/logout': typeof ApiAuthLogoutRoute
+  '/api/auth/profile': typeof ApiAuthProfileRoute
+  '/api/auth/signup': typeof ApiAuthSignupRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -119,8 +182,15 @@ export interface FileRouteTypes {
     | '/feed'
     | '/groceries'
     | '/insights'
+    | '/profile'
+    | '/signin'
+    | '/signup'
     | '/api/groceries'
     | '/api/search'
+    | '/api/auth/login'
+    | '/api/auth/logout'
+    | '/api/auth/profile'
+    | '/api/auth/signup'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -131,8 +201,15 @@ export interface FileRouteTypes {
     | '/feed'
     | '/groceries'
     | '/insights'
+    | '/profile'
+    | '/signin'
+    | '/signup'
     | '/api/groceries'
     | '/api/search'
+    | '/api/auth/login'
+    | '/api/auth/logout'
+    | '/api/auth/profile'
+    | '/api/auth/signup'
   id:
     | '__root__'
     | '/'
@@ -143,8 +220,15 @@ export interface FileRouteTypes {
     | '/feed'
     | '/groceries'
     | '/insights'
+    | '/profile'
+    | '/signin'
+    | '/signup'
     | '/api/groceries'
     | '/api/search'
+    | '/api/auth/login'
+    | '/api/auth/logout'
+    | '/api/auth/profile'
+    | '/api/auth/signup'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -156,12 +240,40 @@ export interface RootRouteChildren {
   FeedRoute: typeof FeedRoute
   GroceriesRoute: typeof GroceriesRoute
   InsightsRoute: typeof InsightsRoute
+  ProfileRoute: typeof ProfileRoute
+  SigninRoute: typeof SigninRoute
+  SignupRoute: typeof SignupRoute
   ApiGroceriesRoute: typeof ApiGroceriesRoute
   ApiSearchRoute: typeof ApiSearchRoute
+  ApiAuthLoginRoute: typeof ApiAuthLoginRoute
+  ApiAuthLogoutRoute: typeof ApiAuthLogoutRoute
+  ApiAuthProfileRoute: typeof ApiAuthProfileRoute
+  ApiAuthSignupRoute: typeof ApiAuthSignupRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/signup': {
+      id: '/signup'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/signin': {
+      id: '/signin'
+      path: '/signin'
+      fullPath: '/signin'
+      preLoaderRoute: typeof SigninRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profile': {
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/insights': {
       id: '/insights'
       path: '/insights'
@@ -232,6 +344,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiGroceriesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/auth/signup': {
+      id: '/api/auth/signup'
+      path: '/api/auth/signup'
+      fullPath: '/api/auth/signup'
+      preLoaderRoute: typeof ApiAuthSignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/profile': {
+      id: '/api/auth/profile'
+      path: '/api/auth/profile'
+      fullPath: '/api/auth/profile'
+      preLoaderRoute: typeof ApiAuthProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/logout': {
+      id: '/api/auth/logout'
+      path: '/api/auth/logout'
+      fullPath: '/api/auth/logout'
+      preLoaderRoute: typeof ApiAuthLogoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/login': {
+      id: '/api/auth/login'
+      path: '/api/auth/login'
+      fullPath: '/api/auth/login'
+      preLoaderRoute: typeof ApiAuthLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -244,8 +384,15 @@ const rootRouteChildren: RootRouteChildren = {
   FeedRoute: FeedRoute,
   GroceriesRoute: GroceriesRoute,
   InsightsRoute: InsightsRoute,
+  ProfileRoute: ProfileRoute,
+  SigninRoute: SigninRoute,
+  SignupRoute: SignupRoute,
   ApiGroceriesRoute: ApiGroceriesRoute,
   ApiSearchRoute: ApiSearchRoute,
+  ApiAuthLoginRoute: ApiAuthLoginRoute,
+  ApiAuthLogoutRoute: ApiAuthLogoutRoute,
+  ApiAuthProfileRoute: ApiAuthProfileRoute,
+  ApiAuthSignupRoute: ApiAuthSignupRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

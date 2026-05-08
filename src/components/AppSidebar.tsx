@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { LayoutGrid, Search, BarChart3, MessageCircle, Sparkles, Siren, ShoppingBasket, ShoppingCart, Newspaper } from "lucide-react";
+import { LayoutGrid, Search, BarChart3, MessageCircle, Sparkles, Siren, ShoppingBasket, ShoppingCart, Newspaper, UserRound } from "lucide-react";
 import { useT } from "@/lib/i18n";
 
 const items = [
@@ -11,6 +11,7 @@ const items = [
   { title: "nav.emergency" as const, url: "/emergency", icon: Siren },
   { title: "nav.insights" as const, url: "/insights", icon: BarChart3 },
   { title: "nav.assistant" as const, url: "/chat", icon: MessageCircle },
+  { title: "nav.profile" as const, url: "/profile", icon: UserRound },
 ];
 
 export function AppSidebar() {
