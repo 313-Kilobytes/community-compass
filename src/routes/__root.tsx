@@ -5,6 +5,8 @@ import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { CartProvider } from "@/lib/cart";
 import { ThemeProvider } from "@/lib/theme";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { AuthProvider } from "@/lib/auth";
+import { AuthControls } from "@/components/AuthControls";
 
 import appCss from "../styles.css?url";
 
@@ -36,16 +38,16 @@ export const Route = createRootRoute({
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { name: "theme-color", content: "#7C3AED" },
-      { title: "CommunityHub — Resource Intelligence" },
+      { title: "CommunityHub - Resource Intelligence" },
       {
         name: "description",
-        content: "Find clinics, NGOs, and municipal alerts in your community.",
+        content: "Find clinics, NGOs, jobs, and municipal alerts in your community.",
       },
       { name: "author", content: "CommunityHub" },
-      { property: "og:title", content: "CommunityHub — Resource Intelligence" },
+      { property: "og:title", content: "CommunityHub - Resource Intelligence" },
       {
         property: "og:description",
-        content: "Find clinics, NGOs, and municipal alerts in your community.",
+        content: "Find clinics, NGOs, jobs, and municipal alerts in your community.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -84,19 +86,22 @@ function RootComponent() {
   return (
     <LanguageProvider>
       <ThemeProvider>
-        <CartProvider>
-          <div className="flex min-h-screen w-full bg-background">
-            <AppSidebar />
-            <main className="flex-1 min-w-0 pb-20 md:pb-0 relative">
-              <div className="absolute top-3 right-3 md:top-5 md:right-6 z-40 flex items-center gap-2">
-                <ThemeToggle />
-                <LanguageSwitcher />
-              </div>
-              <Outlet />
-            </main>
-            <MobileNav />
-          </div>
-        </CartProvider>
+        <AuthProvider>
+          <CartProvider>
+            <div className="flex min-h-screen w-full bg-background">
+              <AppSidebar />
+              <main className="flex-1 min-w-0 pb-20 md:pb-0 relative">
+                <div className="absolute top-3 right-3 md:top-5 md:right-6 z-40 flex items-center gap-2">
+                  <AuthControls />
+                  <ThemeToggle />
+                  <LanguageSwitcher />
+                </div>
+                <Outlet />
+              </main>
+              <MobileNav />
+            </div>
+          </CartProvider>
+        </AuthProvider>
       </ThemeProvider>
     </LanguageProvider>
   );

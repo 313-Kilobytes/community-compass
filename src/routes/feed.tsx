@@ -44,6 +44,7 @@ import {
   type CommunityPost,
   type PostCategory,
 } from "@/lib/community";
+import { useAuth } from "@/lib/auth";
 import { useT } from "@/lib/i18n";
 
 type LocationHit = {
@@ -69,6 +70,7 @@ export const Route = createFileRoute("/feed")({
 
 function FeedPage() {
   const { t } = useT();
+  const { user } = useAuth();
   const fileRef = useRef<HTMLInputElement>(null);
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [chatSessions, setChatSessions] = useState<CommunityChatSession[]>([]);
@@ -131,6 +133,16 @@ function FeedPage() {
 
     return () => window.clearTimeout(timer);
   }, [area, coords]);
+
+  useEffect(() => {
+    if (!user) return;
+    const preferredLocation = user.currentLocation ?? user.permanentLocation;
+    setName(user.fullName || user.username);
+    setArea(preferredLocation.label);
+    setRegion(preferredLocation.region);
+    setRegionalFilter(preferredLocation.region);
+    setCoords(preferredLocation.coords);
+  }, [user]);
 
   useEffect(() => {
     setPosts(loadFeedPosts());
@@ -230,7 +242,7 @@ function FeedPage() {
 
     const post: CommunityPost = {
       id: crypto.randomUUID(),
-      name: anonymous ? "Anonymous" : name.trim() || t("feed.defaultName"),
+      name: anonymous ? "Anonymous" : user ? `@${user.username}` : name.trim() || t("feed.defaultName"),
       area: area.trim() || region,
       region,
       category,
