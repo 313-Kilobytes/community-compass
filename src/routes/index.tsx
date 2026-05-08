@@ -7,7 +7,6 @@ import {
   BarChart3,
   Bell,
   BrainCircuit,
-  Briefcase,
   CloudRain,
   Crosshair,
   ExternalLink,
@@ -32,7 +31,7 @@ import {
 import { analyzeIncident } from "@/lib/crisis-intelligence";
 import { useT } from "@/lib/i18n";
 
-type Cat = "clinic" | "ngo" | "job" | "alert";
+type Cat = "clinic" | "ngo" | "alert";
 type Result = { id: string; type: Cat; name: string; description: string; location: string; url: string };
 type IncidentType = "Crime" | "Infrastructure" | "Medical" | "Weather" | "Scam" | "Fire";
 type Severity = "High" | "Medium" | "Low";
@@ -64,18 +63,16 @@ type HotspotRow = {
   top: number;
 };
 
-const filters: { key: "all" | Cat; tk: "filter.all" | "filter.clinic" | "filter.ngo" | "filter.job" | "filter.alert" }[] = [
+const filters: { key: "all" | Cat; tk: "filter.all" | "filter.clinic" | "filter.ngo" | "filter.alert" }[] = [
   { key: "all", tk: "filter.all" },
   { key: "clinic", tk: "filter.clinic" },
   { key: "ngo", tk: "filter.ngo" },
-  { key: "job", tk: "filter.job" },
   { key: "alert", tk: "filter.alert" },
 ];
 
 const typeMeta: Record<Cat, { label: string; icon: typeof MapPin; cls: string }> = {
   clinic: { label: "Clinic", icon: Stethoscope, cls: "bg-primary/10 text-primary" },
   ngo: { label: "NGO", icon: HeartHandshake, cls: "bg-success/15 text-[color:var(--success)]" },
-  job: { label: "Job", icon: Briefcase, cls: "bg-accent/20 text-accent-foreground" },
   alert: { label: "Alert", icon: AlertTriangle, cls: "bg-warning/20 text-[color:var(--foreground)]" },
 };
 
@@ -528,7 +525,7 @@ function ResourcesPage() {
       <section className="mb-5">
         <div className="mb-3">
           <h2 className="font-display text-xl md:text-2xl font-bold tracking-tight">Search live community resources</h2>
-          <p className="text-sm text-muted-foreground mt-1">Use Firecrawl-backed search to find current clinics, NGOs, jobs, and municipal alerts.</p>
+          <p className="text-sm text-muted-foreground mt-1">Use Firecrawl-backed search to find current clinics, NGOs, and municipal alerts.</p>
         </div>
         <form onSubmit={runSearch} className="glass border border-border rounded-2xl p-3 shadow-card flex flex-col sm:flex-row gap-2">
           <div className="relative flex-1">

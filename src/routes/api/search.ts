@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-type Cat = "clinic" | "ngo" | "job" | "alert";
+type Cat = "clinic" | "ngo" | "alert";
 
 const queryFor = (cat: Cat | "all", keyword: string, location: string) => {
   const k = keyword.trim();
@@ -8,9 +8,8 @@ const queryFor = (cat: Cat | "all", keyword: string, location: string) => {
   const base =
     cat === "clinic" ? `community clinics health services` :
     cat === "ngo" ? `NGOs nonprofits community organizations` :
-    cat === "job" ? `entry-level job openings hiring` :
     cat === "alert" ? `municipal alerts utility outage road closure news` :
-    `community resources clinics NGOs jobs alerts`;
+    `community resources clinics NGOs alerts`;
   return [k, base, loc && `in ${loc}`].filter(Boolean).join(" ");
 };
 
@@ -48,7 +47,7 @@ export const Route = createFileRoute("/api/search")({
           return Response.json({ results: hit.data, cached: true });
         }
 
-        const cats: (Cat)[] = category === "all" ? ["clinic", "ngo", "job", "alert"] : [category];
+        const cats: Cat[] = category === "all" ? ["clinic", "ngo", "alert"] : [category];
 
         const results: Array<{
           id: string;

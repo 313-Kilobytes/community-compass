@@ -17,7 +17,6 @@ export const Route = createFileRoute("/availability")({
 const examples = [
   "Clinic near me",
   "NGOs for youth support",
-  "Jobs in retail",
   "Power outage alerts",
   "Mental health",
   "Free food",
@@ -37,7 +36,6 @@ function scoreResources(query: string) {
       // Type intent boost
       if (q.includes("clinic") && r.type === "clinic") score += 2;
       if (q.includes("ngo") && r.type === "ngo") score += 2;
-      if (q.includes("job") && r.type === "job") score += 2;
       if ((q.includes("alert") || q.includes("outage")) && r.type === "alert") score += 2;
       return { r, score };
     })

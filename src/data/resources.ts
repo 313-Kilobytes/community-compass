@@ -1,4 +1,4 @@
-export type ResourceType = "clinic" | "ngo" | "job" | "alert";
+export type ResourceType = "clinic" | "ngo" | "alert";
 
 export interface Resource {
   id: string;
@@ -23,12 +23,6 @@ export const resources: Resource[] = [
   { id: "n2", type: "ngo", name: "FoodShare Network", description: "Weekly food distribution and community kitchen for families in need.", location: "Citywide", contact: "+1 555-0201", tags: ["food", "hunger", "family"] },
   { id: "n3", type: "ngo", name: "Shelter Together", description: "Emergency housing and transitional support for the unhoused.", location: "District 5", contact: "+1 555-0202", tags: ["housing", "shelter", "emergency"] },
   { id: "n4", type: "ngo", name: "Women Empower Collective", description: "Legal aid, vocational training, and safe spaces for women.", location: "District 1", contact: "help@wempower.org", tags: ["women", "legal", "training"] },
-
-  // Jobs
-  { id: "j1", type: "job", name: "Retail Associate — GreenMart", description: "Part-time cashier and stocking. No experience required.", location: "District 2", contact: "apply@greenmart.com", tags: ["retail", "part-time", "entry-level"] },
-  { id: "j2", type: "job", name: "Warehouse Operator", description: "Full-time logistics role with benefits and weekly pay.", location: "Industrial Zone", contact: "+1 555-0301", tags: ["warehouse", "logistics", "full-time"] },
-  { id: "j3", type: "job", name: "Community Health Worker", description: "Outreach role with Sunrise Clinic. Training provided.", location: "Westside", contact: "hr@sunriseclinic.org", tags: ["health", "community", "training"] },
-  { id: "j4", type: "job", name: "Junior Web Developer", description: "Entry-level remote role for civic-tech NGO. React experience helpful.", location: "Remote", contact: "jobs@civictech.org", tags: ["tech", "remote", "entry-level"] },
 
   // Alerts
   { id: "a1", type: "alert", name: "Scheduled Power Outage", description: "Grid maintenance in District 4 from 9am–2pm Saturday.", location: "District 4", date: "2026-05-09", tags: ["power", "outage", "utility"] },
