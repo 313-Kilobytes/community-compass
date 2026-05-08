@@ -20,18 +20,142 @@ type Offer = {
   url: string;
   description: string;
   matchedQuery: string;
-  operatingHours?: StoreHours;
+  image?: string;
+  availability: string;
+  storeLocation?: string;
+  relevance: number;
+  operatingHours: StoreHours;
 };
 
 type FCResult = { url: string; title: string; description?: string; markdown?: string };
 
+type Retailer = {
+  id: string;
+  name: string;
+  domains: string[];
+  hours: Array<{ day: number; open: string; close: string }>;
+  hoursSummary: string;
+  locationHint?: string;
+};
+
 const cache = new Map<string, { at: number; data: Offer[] }>();
+const hoursCache = new Map<string, { at: number; data: StoreHours }>();
+const CACHE_VERSION = "trusted-v6";
 const TTL = 1000 * 60 * 10;
+const HOURS_TTL = 1000 * 60 * 5;
+
+const RETAILERS: Retailer[] = [
+  {
+    id: "checkers",
+    name: "Checkers",
+    domains: ["checkers.co.za"],
+    hours: standardHours("08:00", "20:00"),
+    hoursSummary: "Typical stores: daily 08:00-20:00. Exact hours vary by branch.",
+    locationHint: "Cape Town branches",
+  },
+  {
+    id: "shoprite",
+    name: "Shoprite",
+    domains: ["shoprite.co.za"],
+    hours: standardHours("08:00", "20:00"),
+    hoursSummary: "Typical stores: daily 08:00-20:00. Exact hours vary by branch.",
+    locationHint: "Cape Town branches",
+  },
+  {
+    id: "pick-n-pay",
+    name: "Pick n Pay",
+    domains: ["pnp.co.za", "picknpay.co.za"],
+    hours: [
+      { day: 0, open: "07:00", close: "18:00" },
+      { day: 1, open: "07:00", close: "18:30" },
+      { day: 2, open: "07:00", close: "18:30" },
+      { day: 3, open: "07:00", close: "18:30" },
+      { day: 4, open: "07:00", close: "18:30" },
+      { day: 5, open: "07:00", close: "18:30" },
+      { day: 6, open: "07:00", close: "18:30" },
+    ],
+    hoursSummary: "Most areas: Mon-Sat 07:00-18:30, Sun 07:00-18:00.",
+    locationHint: "Cape Town branches",
+  },
+  {
+    id: "woolworths",
+    name: "Woolworths",
+    domains: ["woolworths.co.za"],
+    hours: standardHours("09:00", "19:00"),
+    hoursSummary: "Typical food stores: daily 09:00-19:00. Exact hours vary by branch.",
+    locationHint: "Cape Town branches",
+  },
+  {
+    id: "spar",
+    name: "SPAR",
+    domains: ["spar.co.za"],
+    hours: standardHours("08:00", "20:00"),
+    hoursSummary: "Typical stores: daily 08:00-20:00. Exact hours vary by branch.",
+    locationHint: "Cape Town branches",
+  },
+  {
+    id: "boxer",
+    name: "Boxer",
+    domains: ["boxer.co.za"],
+    hours: standardHours("08:00", "19:00"),
+    hoursSummary: "Typical stores: daily 08:00-19:00. Exact hours vary by branch.",
+    locationHint: "Cape Town branches",
+  },
+  {
+    id: "makro",
+    name: "Makro",
+    domains: ["makro.co.za"],
+    hours: standardHours("08:00", "18:00"),
+    hoursSummary: "Typical stores: daily 08:00-18:00. Exact hours vary by branch.",
+    locationHint: "Cape Town branches",
+  },
+  {
+    id: "food-lovers-market",
+    name: "Food Lover's Market",
+    domains: ["foodloversmarket.co.za"],
+    hours: standardHours("08:00", "19:00"),
+    hoursSummary: "Typical stores: daily 08:00-19:00. Exact hours vary by branch.",
+    locationHint: "Cape Town branches",
+  },
+];
 
 const PRICE_PATTERNS = [
   /(?:R|ZAR)\s?(\d{1,4}(?:[.,]\d{2}))/gi,
   /(?:R|ZAR)\s?(\d{1,4})(?!\d)/gi,
 ];
+
+const BLOCKED_EXTENSIONS = [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx"];
+const PRODUCT_URL_HINTS = [
+  "/p/",
+  "/prd/",
+  "/prod",
+  "/product",
+  "/products",
+  "/shop/",
+  "/catalog",
+  "/special",
+  "/deals",
+  "/department",
+  "/groceries",
+  "/food",
+  "/all-departments",
+  "/pnpstorefront",
+];
+const NON_GROCERY_PRODUCT_SIGNALS = [
+  "wicker",
+  "plastic utility",
+  "container",
+  "lunch box",
+  "hot water bottle",
+  "warmer",
+  "storage box",
+  "basket set",
+  "appliance",
+];
+
+function standardHours(open: string, close: string) {
+  return [0, 1, 2, 3, 4, 5, 6].map((day) => ({ day, open, close }));
+}
 
 function tokensFor(query: string) {
   return query
@@ -41,11 +165,44 @@ function tokensFor(query: string) {
     .filter((token) => token.length > 1);
 }
 
-function matchesExactItem(result: FCResult, query: string) {
+function hostnameFor(url: string) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "").replace(/^m\./, "");
+  } catch {
+    return "";
+  }
+}
+
+function retailerFor(url: string) {
+  const host = hostnameFor(url);
+  return RETAILERS.find((retailer) => retailer.domains.some((domain) => host === domain || host.endsWith(`.${domain}`)));
+}
+
+function isTrustedProductResult(result: FCResult, query: string) {
+  const retailer = retailerFor(result.url);
+  if (!retailer) return false;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(result.url);
+  } catch {
+    return false;
+  }
+
+  const path = parsed.pathname.toLowerCase();
+  if (BLOCKED_EXTENSIONS.some((extension) => path.endsWith(extension))) return false;
+  const text = `${result.title} ${result.description ?? ""} ${result.markdown ?? ""}`.toLowerCase();
+  if (/\b(blog|news|facebook|reddit|forum|community|press release|recipe)\b/.test(text)) return false;
+  const titleText = result.title.toLowerCase();
+  if (NON_GROCERY_PRODUCT_SIGNALS.some((signal) => titleText.includes(signal))) return false;
+
   const tokens = tokensFor(query);
   if (tokens.length === 0) return false;
-  const text = `${result.title} ${result.description ?? ""} ${result.markdown ?? ""}`.toLowerCase();
-  return tokens.every((token) => text.includes(token));
+  const lastPathSegment = decodeURIComponent(path.split("/").filter(Boolean).at(-1) ?? "");
+  const visibleProductText = `${result.title} ${lastPathSegment}`.toLowerCase();
+  const hasProductPath = PRODUCT_URL_HINTS.some((hint) => path.includes(hint));
+  const hasProductText = /\b(price|r\s?\d|add to cart|in stock|out of stock|buy now|product|special)\b/i.test(text);
+  return tokens.every((token) => visibleProductText.includes(token)) && hasProductText && (hasProductPath || path.length > 8);
 }
 
 function extractPrices(text: string): number[] {
@@ -61,133 +218,129 @@ function extractPrices(text: string): number[] {
   return [...new Set(found)];
 }
 
-function hostnameFor(url: string) {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return "Source";
-  }
+function extractImage(text: string, sourceUrl: string) {
+  const image = text.match(/!\[[^\]]*]\((https?:\/\/[^)\s]+)\)/i)?.[1];
+  if (image && !/logo|icon|sprite|placeholder/i.test(image)) return image;
+
+  const htmlImage = text.match(/https?:\/\/[^\s)"']+\.(?:jpg|jpeg|png|webp)(?:\?[^\s)"']*)?/i)?.[0];
+  if (htmlImage && !/logo|icon|sprite|placeholder/i.test(htmlImage)) return htmlImage;
+
+  const retailer = retailerFor(sourceUrl);
+  return retailer ? `https://www.google.com/s2/favicons?domain=${retailer.domains[0]}&sz=128` : undefined;
 }
 
-function extractOperatingHours(text: string, source: string): StoreHours | undefined {
-  const current = text.match(/(?:Open|Closed)\s*\|\s*(?:Closes|Opens)\s*at\s*([0-2]?\d:?[0-5]\d)/i);
-  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-  const dayLines = days
-    .map((day) => {
-      const re = new RegExp(`${day}\\s+(?:is\\s+)?(?:[:|-])?\\s*([0-2]?\\d(?::?\\d{2})?\\s*(?:am|pm)?)(?:\\s*[|\\u2013-]\\s*|\\s+to\\s+)([0-2]?\\d(?::?\\d{2})?\\s*(?:am|pm)?)`, "i");
-      const match = text.match(re);
-      return match ? `${day.slice(0, 3)} ${formatHour(match[1])}-${formatHour(match[2])}` : "";
-    })
-    .filter(Boolean);
-
-  if (current || dayLines.length > 0) {
-    return {
-      summary: dayLines.slice(0, 3).join(", ") || `Current status: ${current?.[0]}`,
-      today: current ? current[0].replace(/\s+/g, " ") : dayLines[0],
-      source,
-      ...statusFromCurrentText(current?.[0]),
-    };
-  }
-
-  return fallbackOperatingHours(source);
+function extractAvailability(text: string) {
+  if (/\b(out of stock|sold out|unavailable|currently unavailable)\b/i.test(text)) return "Out of stock";
+  if (/\b(in stock|available|add to cart|buy now|available online)\b/i.test(text)) return "Available";
+  return "Availability not shown";
 }
 
-function formatHour(value: string) {
-  const clean = value.trim().replace(/^(\d{1,2})(\d{2})$/, "$1:$2");
-  return clean.toUpperCase();
+function extractLocation(text: string, retailer: Retailer) {
+  const capeTownLine = text.match(/(?:Cape Town|Western Cape|Claremont|Bellville|Milnerton|Sea Point|Somerset West)[^\n.]{0,80}/i)?.[0];
+  return capeTownLine?.trim() || retailer.locationHint;
 }
 
-function fallbackOperatingHours(source: string): StoreHours | undefined {
-  const host = hostnameFor(source);
-  if (host.includes("pnp") || host.includes("picknpay")) {
-    const status = statusFromSchedule([
-      { day: 0, open: "07:00", close: "18:00" },
-      { day: 1, open: "07:00", close: "18:30" },
-      { day: 2, open: "07:00", close: "18:30" },
-      { day: 3, open: "07:00", close: "18:30" },
-      { day: 4, open: "07:00", close: "18:30" },
-      { day: 5, open: "07:00", close: "18:30" },
-      { day: 6, open: "07:00", close: "18:30" },
-    ]);
-    return {
-      summary: "Most areas: Mon-Sat 07:00-18:30, Sun 07:00-18:00",
-      today: status.statusLabel,
-      source: "https://pnpmerchants.zendesk.com/hc/en-gb/articles/7579275767442-What-are-the-operating-hours",
-      ...status,
-    };
+function relevanceScore(result: FCResult, query: string, price: number, retailer: Retailer) {
+  const tokens = tokensFor(query);
+  const title = result.title.toLowerCase();
+  const description = (result.description ?? "").toLowerCase();
+  const path = (() => {
+    try {
+      return new URL(result.url).pathname.toLowerCase();
+    } catch {
+      return "";
+    }
+  })();
+
+  let score = 0;
+  for (const token of tokens) {
+    if (title.includes(token)) score += 8;
+    if (description.includes(token)) score += 3;
+    if (path.includes(token)) score += 2;
   }
-  if (host.includes("foodloversmarket")) {
-    return branchHours(source);
-  }
-  if (host.includes("woolworths")) {
-    return branchHours(source);
-  }
-  if (host.includes("checkers") || host.includes("shoprite")) {
-    return branchHours(source);
-  }
-  return undefined;
+  if (retailer.domains.some((domain) => path.includes(domain.split(".")[0]))) score += 1;
+  if (Number.isFinite(price)) score += 2;
+  return score;
 }
 
-function branchHours(source: string): StoreHours {
-  return {
-    summary: "Trading hours vary by branch and are published on the linked store page.",
-    today: "Check exact open/close times on the linked source",
+function normalizeProduct(title: string) {
+  return title
+    .toLowerCase()
+    .replace(/\b(checkers|shoprite|pick n pay|pnp|woolworths|spar|boxer|makro|food lover'?s market)\b/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function dedupeOffers(offers: Offer[]) {
+  const seen = new Map<string, Offer>();
+  for (const offer of offers) {
+    const key = `${offer.storeId}|${normalizeProduct(offer.title)}`;
+    const existing = seen.get(key);
+    if (!existing || offer.relevance > existing.relevance || (offer.relevance === existing.relevance && offer.price < existing.price)) {
+      seen.set(key, offer);
+    }
+  }
+  return [...seen.values()];
+}
+
+function getCapeTownNow() {
+  const parts = new Intl.DateTimeFormat("en-ZA", {
+    timeZone: "Africa/Johannesburg",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+  const weekday = parts.find((part) => part.type === "weekday")?.value ?? "Mon";
+  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? 0);
+  const minute = Number(parts.find((part) => part.type === "minute")?.value ?? 0);
+  const day = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(weekday);
+  return { day: Math.max(0, day), minutes: hour * 60 + minute };
+}
+
+function operatingHoursFor(retailer: Retailer, source: string): StoreHours {
+  const cached = hoursCache.get(retailer.id);
+  if (cached && Date.now() - cached.at < HOURS_TTL) return cached.data;
+
+  const now = getCapeTownNow();
+  const today = retailer.hours.find((item) => item.day === now.day);
+  const status = statusFromSchedule(today, now.minutes);
+  const data = {
+    summary: retailer.hoursSummary,
+    today: today ? `Today ${today.open}-${today.close}` : "Closed today",
     source,
-    status: "unknown",
-    statusLabel: "Hours vary by branch",
+    ...status,
   };
+  hoursCache.set(retailer.id, { at: Date.now(), data });
+  return data;
 }
 
-function statusFromCurrentText(text?: string): Pick<StoreHours, "status" | "statusLabel"> {
-  if (!text) return { status: "unknown", statusLabel: "Hours found" };
-  const clean = text.replace(/\s+/g, " ");
-  const closesAt = clean.match(/Closes\s*at\s*([0-2]?\d:?[0-5]\d)/i)?.[1];
-  if (/Closed/i.test(clean)) return { status: "closed", statusLabel: clean };
-  if (closesAt) {
-    const minutes = minutesUntil(closesAt);
-    if (minutes >= 0 && minutes <= 60) return { status: "closing-soon", statusLabel: `Closing soon: ${clean}` };
-  }
-  if (/Open/i.test(clean)) return { status: "open", statusLabel: clean };
-  return { status: "unknown", statusLabel: "Hours found" };
-}
-
-function statusFromSchedule(schedule: Array<{ day: number; open: string; close: string }>): Pick<StoreHours, "status" | "statusLabel"> {
-  const now = new Date();
-  const today = schedule.find((item) => item.day === now.getDay());
+function statusFromSchedule(
+  today: { day: number; open: string; close: string } | undefined,
+  currentMinutes: number,
+): Pick<StoreHours, "status" | "statusLabel"> {
   if (!today) return { status: "closed", statusLabel: "Closed today" };
-  const current = now.getHours() * 60 + now.getMinutes();
   const open = toMinutes(today.open);
   const close = toMinutes(today.close);
-  if (current < open || current >= close) return { status: "closed", statusLabel: `Closed now. Opens ${today.open}` };
-  if (close - current <= 60) return { status: "closing-soon", statusLabel: `Closing soon. Closes ${today.close}` };
+  if (currentMinutes < open) return { status: "closed", statusLabel: `Closed now. Opens ${today.open}` };
+  if (currentMinutes >= close) return { status: "closed", statusLabel: `Closed now. Opens tomorrow` };
+  if (close - currentMinutes <= 60) return { status: "closing-soon", statusLabel: `Closing soon. Closes ${today.close}` };
   return { status: "open", statusLabel: `Open now. Closes ${today.close}` };
 }
 
-function minutesUntil(value: string) {
-  const target = toMinutes(value);
-  const now = new Date();
-  return target - (now.getHours() * 60 + now.getMinutes());
-}
-
 function toMinutes(value: string) {
-  const clean = value.trim().replace(/^(\d{1,2})(\d{2})$/, "$1:$2");
-  const match = clean.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i);
-  if (!match) return Number.NaN;
-  let hours = Number(match[1]);
-  const minutes = Number(match[2] ?? 0);
-  const meridian = match[3]?.toLowerCase();
-  if (meridian === "pm" && hours < 12) hours += 12;
-  if (meridian === "am" && hours === 12) hours = 0;
+  const [hours, minutes] = value.split(":").map(Number);
   return hours * 60 + minutes;
 }
 
-async function searchExactItem(apiKey: string, query: string): Promise<Offer[]> {
+async function searchRetailer(apiKey: string, query: string, retailer: Retailer): Promise<FCResult[]> {
+  const domainQuery = `site:${retailer.domains[0]}`;
   const res = await fetch("https://api.firecrawl.dev/v2/search", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      query: `"${query}" grocery price South Africa retailer`,
-      limit: 10,
+      query: `${domainQuery} ${query} price -facebook -reddit -forum -blog -news -pdf`,
+      limit: 5,
       scrapeOptions: { formats: ["markdown"], onlyMainContent: true },
     }),
   });
@@ -197,30 +350,46 @@ async function searchExactItem(apiKey: string, query: string): Promise<Offer[]> 
   const json = (await res.json()) as {
     data?: { web?: FCResult[] } | FCResult[];
   };
-  const results: FCResult[] = Array.isArray(json.data) ? json.data : json.data?.web ?? [];
+  return Array.isArray(json.data) ? json.data : json.data?.web ?? [];
+}
 
-  return results
-    .filter((result) => matchesExactItem(result, query))
+async function searchExactItem(apiKey: string, query: string): Promise<Offer[]> {
+  const settled = await Promise.all(RETAILERS.map((retailer) => searchRetailer(apiKey, query, retailer)));
+  const results = settled.flat();
+
+  const offers = results
+    .filter((result) => isTrustedProductResult(result, query))
     .flatMap((result) => {
+      const retailer = retailerFor(result.url);
+      if (!retailer) return [];
       const text = `${result.title} ${result.description ?? ""} ${result.markdown ?? ""}`;
       const prices = extractPrices(text);
       if (prices.length === 0) return [];
       const price = prices[0];
-      const store = hostnameFor(result.url);
+      const title = result.title.replace(/\s*\|\s*.*$/, "").trim();
+      const relevance = relevanceScore(result, query, price, retailer);
+
       return [{
-        id: `${store}-${result.url}`,
-        store,
-        storeId: store,
-        title: result.title,
+        id: `${retailer.id}-${result.url}`,
+        store: retailer.name,
+        storeId: retailer.id,
+        title,
         description: result.description ?? "",
         url: result.url,
         price,
         priceText: `R${price.toFixed(2)}`,
         matchedQuery: query,
-        operatingHours: extractOperatingHours(text, result.url),
+        image: extractImage(text, result.url),
+        availability: extractAvailability(text),
+        storeLocation: extractLocation(text, retailer),
+        relevance,
+        operatingHours: operatingHoursFor(retailer, result.url),
       }];
-    })
-    .sort((a, b) => a.price - b.price);
+    });
+
+  return dedupeOffers(offers)
+    .sort((a, b) => b.relevance - a.relevance || a.price - b.price)
+    .slice(0, 12);
 }
 
 export const Route = createFileRoute("/api/groceries")({
@@ -241,7 +410,7 @@ export const Route = createFileRoute("/api/groceries")({
         const query = (body.query ?? "").toString().trim().slice(0, 120);
         if (!query) return Response.json({ offers: [] });
 
-        const cacheKey = query.toLowerCase();
+        const cacheKey = `${CACHE_VERSION}|${query.toLowerCase()}`;
         const hit = cache.get(cacheKey);
         if (hit && Date.now() - hit.at < TTL) return Response.json({ offers: hit.data, cached: true, exactQuery: query });
 
