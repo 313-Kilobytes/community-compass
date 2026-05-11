@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { UserLocation, UserProfile } from "@/lib/server/auth";
+import type { UserLocation, UserProfile, UserRole } from "@/lib/server/auth";
 
 type AuthInput = {
   username: string;
@@ -145,4 +145,4 @@ export function useAuth() {
   return value;
 }
 
-export type { UserLocation, UserProfile };
+export type { UserLocation, UserProfile, UserRole };
