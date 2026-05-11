@@ -3,6 +3,7 @@ import { Camera, Mail, MapPin, Save, ShieldCheck, UserRound } from "lucide-react
 import { useEffect, useState } from "react";
 import { LocationPicker } from "@/components/LocationPicker";
 import { useAuth, type UserLocation } from "@/lib/auth";
+import { detectCapeTownRegion } from "@/lib/community";
 
 export const Route = createFileRoute("/profile")({
   head: () => ({
@@ -79,13 +80,16 @@ function ProfileEditor() {
   const [username, setUsername] = useState(user?.username ?? "");
   const [fullName, setFullName] = useState(user?.fullName ?? "");
   const [currentLocation, setCurrentLocation] = useState<UserLocation | null>(user?.currentLocation ?? null);
+  const [currentLocationQuery, setCurrentLocationQuery] = useState(user?.currentLocation?.label ?? "");
   const [profilePicture, setProfilePicture] = useState(user?.profilePicture ?? "");
   const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     setUsername(user?.username ?? "");
     setFullName(user?.fullName ?? "");
     setCurrentLocation(user?.currentLocation ?? null);
+    setCurrentLocationQuery(user?.currentLocation?.label ?? "");
     setProfilePicture(user?.profilePicture ?? "");
   }, [user]);
 
@@ -93,8 +97,14 @@ function ProfileEditor() {
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
+    setSaved(false);
     setBusy(true);
-    await updateProfile({ username, fullName, currentLocation, profilePicture });
+    const manualCurrentLocation =
+      currentLocationQuery.trim().length >= 2 && currentLocationQuery.trim() !== currentLocation?.label
+        ? { label: currentLocationQuery.trim(), region: detectCapeTownRegion(currentLocationQuery) }
+        : currentLocation;
+    const ok = await updateProfile({ username, fullName, currentLocation: manualCurrentLocation, profilePicture });
+    setSaved(ok);
     setBusy(false);
   };
 
@@ -133,9 +143,19 @@ function ProfileEditor() {
             <ReadOnly label="Permanent location" value={`${user.permanentLocation.region} - ${user.permanentLocation.label}`} icon={MapPin} />
           </div>
           <div className="md:col-span-2">
-            <LocationPicker value={currentLocation} onChange={setCurrentLocation} label="Current location" />
+            <LocationPicker
+              value={currentLocation}
+              onChange={setCurrentLocation}
+              onQueryChange={setCurrentLocationQuery}
+              label="Current location"
+            />
           </div>
         </div>
+        {saved && (
+          <div className="mt-4 rounded-xl border border-success/30 bg-success/10 px-3 py-2 text-sm font-semibold text-success">
+            Profile saved.
+          </div>
+        )}
         <button
           type="submit"
           disabled={busy}

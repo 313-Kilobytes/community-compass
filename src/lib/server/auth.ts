@@ -10,12 +10,15 @@ export type UserProfile = {
   userId: string;
   username: string;
   email: string;
+  role?: UserRole;
   fullName?: string;
   permanentLocation: UserLocation;
   currentLocation?: UserLocation;
   createdAt: string;
   profilePicture?: string;
 };
+
+export type UserRole = "super_admin" | "regional_admin" | "community_moderator" | "verified_reporter" | "user";
 
 type StoredUser = UserProfile & {
   password: string;
@@ -46,7 +49,10 @@ async function userStorePath() {
 }
 
 async function ensureUsersLoaded() {
-  if (globalStore.__communityUsersLoaded) return;
+  if (globalStore.__communityUsersLoaded) {
+    await bootstrapSuperAdmin();
+    return;
+  }
   globalStore.__communityUsersLoaded = true;
 
   const filePath = await userStorePath();
@@ -60,6 +66,8 @@ async function ensureUsersLoaded() {
   } catch {
     globalStore.__communityUsers ??= [];
   }
+
+  await bootstrapSuperAdmin();
 }
 
 async function saveUsers() {
@@ -82,6 +90,50 @@ function normalizeEmail(email: string) {
 
 function normalizeUsername(username: string) {
   return username.trim().toLowerCase();
+}
+
+async function configuredSuperAdminEmails() {
+  let raw = process.env.SUPER_ADMIN_EMAILS ?? "";
+
+  if (!raw && typeof process !== "undefined" && process.versions?.node) {
+    try {
+      const fs = await import("node:fs/promises");
+      const path = await import("node:path");
+      const envText = await fs.readFile(path.join(process.cwd(), ".env.local"), "utf8");
+      const line = envText
+        .split(/\r?\n/)
+        .map((item) => item.trim())
+        .find((item) => item.startsWith("SUPER_ADMIN_EMAILS="));
+      raw = line?.slice("SUPER_ADMIN_EMAILS=".length).trim() ?? "";
+    } catch {
+      raw = "";
+    }
+  }
+
+  return new Set(raw.split(",").map((email) => normalizeEmail(email)).filter(Boolean));
+}
+
+async function isConfiguredSuperAdmin(email: string) {
+  return (await configuredSuperAdminEmails()).has(normalizeEmail(email));
+}
+
+async function bootstrapSuperAdmin() {
+  const currentUsers = users();
+  let changed = false;
+
+  for (const user of currentUsers) {
+    if ((await isConfiguredSuperAdmin(user.email)) && user.role !== "super_admin") {
+      user.role = "super_admin";
+      changed = true;
+    }
+  }
+
+  if (currentUsers.length > 0 && !currentUsers.some((user) => user.role === "super_admin")) {
+    currentUsers[0].role = "super_admin";
+    changed = true;
+  }
+
+  if (changed) await saveUsers();
 }
 
 function encodeBase64Url(input: ArrayBuffer | Uint8Array | string) {
@@ -276,6 +328,7 @@ export async function createUser(input: {
     username: input.username.trim(),
     email: emailKey,
     password: await hashPassword(input.password),
+    role: users().length === 0 || (await isConfiguredSuperAdmin(emailKey)) ? "super_admin" : "user",
     fullName: validateName(input.fullName),
     permanentLocation: input.permanentLocation,
     createdAt: new Date().toISOString(),
@@ -306,7 +359,18 @@ export async function getUserFromRequest(request: Request) {
   const payload = await verifySession(token);
   if (!payload) return null;
   const user = users().find((item) => item.userId === payload.userId);
+  if (user && user.role !== "super_admin" && (await isConfiguredSuperAdmin(user.email))) {
+    user.role = "super_admin";
+    await saveUsers();
+  }
   return user ? publicUser(user) : null;
+}
+
+export async function requireSuperAdmin(request: Request) {
+  const user = await getUserFromRequest(request);
+  if (!user) return { error: "Your session has expired. Please sign in again.", status: 401 as const };
+  if (user.role !== "super_admin") return { error: "Super admin access is required.", status: 403 as const };
+  return { user };
 }
 
 export function withSession(user: UserProfile, token: string, status = 200) {
@@ -338,4 +402,35 @@ export async function updateUserProfile(userId: string, patch: {
 
   await saveUsers();
   return { user: publicUser(user) };
+}
+
+export async function listUsers() {
+  await ensureUsersLoaded();
+  return users().map(publicUser);
+}
+
+export async function updateUserRole(userId: string, role: UserRole) {
+  await ensureUsersLoaded();
+  const user = users().find((item) => item.userId === userId);
+  if (!user) return { error: "User not found." };
+  const validRoles: UserRole[] = ["super_admin", "regional_admin", "community_moderator", "verified_reporter", "user"];
+  if (!validRoles.includes(role)) return { error: "Role is invalid." };
+  if (user.role === "super_admin" && role !== "super_admin" && users().filter((item) => item.role === "super_admin").length === 1) {
+    return { error: "At least one super admin is required." };
+  }
+  user.role = role;
+  await saveUsers();
+  return { user: publicUser(user) };
+}
+
+export async function deleteUser(userId: string) {
+  await ensureUsersLoaded();
+  const index = users().findIndex((item) => item.userId === userId);
+  if (index < 0) return { error: "User not found." };
+  if (users()[index].role === "super_admin" && users().filter((item) => item.role === "super_admin").length === 1) {
+    return { error: "At least one super admin is required." };
+  }
+  users().splice(index, 1);
+  await saveUsers();
+  return { ok: true };
 }

@@ -61,6 +61,13 @@ export type AreaThread = {
   updatedAt: string;
 };
 
+export type CommunitySnapshot = {
+  posts: CommunityPost[];
+  chatSessions: CommunityChatSession[];
+  areaComments: Record<string, CommunityComment[]>;
+  activeCounts: Partial<Record<CapeTownRegion, number>>;
+};
+
 export const FEED_STORAGE_KEY = "community-feed-posts";
 export const CHAT_SESSIONS_STORAGE_KEY = "community-chat-sessions";
 export const ACTIVE_CHAT_STORAGE_KEY = "community-active-chat-id";
@@ -232,6 +239,45 @@ export function loadAreaComments() {
 
 export function saveAreaComments(comments: Record<string, CommunityComment[]>) {
   writeJson(AREA_COMMENTS_STORAGE_KEY, comments);
+}
+
+export async function loadCommunitySnapshot(): Promise<CommunitySnapshot | null> {
+  try {
+    const response = await fetch("/api/community", { credentials: "include" });
+    if (!response.ok) return null;
+    return (await response.json()) as CommunitySnapshot;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveCommunitySnapshot(snapshot: Omit<CommunitySnapshot, "activeCounts">) {
+  try {
+    const response = await fetch("/api/community", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(snapshot),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function pingCommunityActivity(region: CapeTownRegion) {
+  try {
+    const response = await fetch("/api/community/activity", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ region }),
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as { activeCounts: Partial<Record<CapeTownRegion, number>> };
+  } catch {
+    return null;
+  }
 }
 
 export function buildAreaThreads(

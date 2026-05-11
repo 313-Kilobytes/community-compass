@@ -19,13 +19,21 @@ import { Route as EmergencyRouteImport } from './routes/emergency'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as CartRouteImport } from './routes/cart'
 import { Route as AvailabilityRouteImport } from './routes/availability'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiTicketsRouteImport } from './routes/api/tickets'
 import { Route as ApiSearchRouteImport } from './routes/api/search'
 import { Route as ApiGroceriesRouteImport } from './routes/api/groceries'
+import { Route as ApiCommunityRouteImport } from './routes/api/community'
+import { Route as ApiAdminRouteImport } from './routes/api/admin'
+import { Route as ApiCommunityActivityRouteImport } from './routes/api/community/activity'
 import { Route as ApiAuthSignupRouteImport } from './routes/api/auth/signup'
 import { Route as ApiAuthProfileRouteImport } from './routes/api/auth/profile'
 import { Route as ApiAuthLogoutRouteImport } from './routes/api/auth/logout'
 import { Route as ApiAuthLoginRouteImport } from './routes/api/auth/login'
+import { Route as ApiAdminOperationsRouteImport } from './routes/api/admin/operations'
+import { Route as ApiAdminCommunityRouteImport } from './routes/api/admin/community'
+import { Route as ApiAdminUsersUserIdRouteImport } from './routes/api/admin/users/$userId'
 
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
@@ -77,9 +85,19 @@ const AvailabilityRoute = AvailabilityRouteImport.update({
   path: '/availability',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiTicketsRoute = ApiTicketsRouteImport.update({
+  id: '/api/tickets',
+  path: '/api/tickets',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiSearchRoute = ApiSearchRouteImport.update({
@@ -91,6 +109,21 @@ const ApiGroceriesRoute = ApiGroceriesRouteImport.update({
   id: '/api/groceries',
   path: '/api/groceries',
   getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCommunityRoute = ApiCommunityRouteImport.update({
+  id: '/api/community',
+  path: '/api/community',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAdminRoute = ApiAdminRouteImport.update({
+  id: '/api/admin',
+  path: '/api/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCommunityActivityRoute = ApiCommunityActivityRouteImport.update({
+  id: '/activity',
+  path: '/activity',
+  getParentRoute: () => ApiCommunityRoute,
 } as any)
 const ApiAuthSignupRoute = ApiAuthSignupRouteImport.update({
   id: '/api/auth/signup',
@@ -112,9 +145,25 @@ const ApiAuthLoginRoute = ApiAuthLoginRouteImport.update({
   path: '/api/auth/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAdminOperationsRoute = ApiAdminOperationsRouteImport.update({
+  id: '/operations',
+  path: '/operations',
+  getParentRoute: () => ApiAdminRoute,
+} as any)
+const ApiAdminCommunityRoute = ApiAdminCommunityRouteImport.update({
+  id: '/community',
+  path: '/community',
+  getParentRoute: () => ApiAdminRoute,
+} as any)
+const ApiAdminUsersUserIdRoute = ApiAdminUsersUserIdRouteImport.update({
+  id: '/users/$userId',
+  path: '/users/$userId',
+  getParentRoute: () => ApiAdminRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/availability': typeof AvailabilityRoute
   '/cart': typeof CartRoute
   '/chat': typeof ChatRoute
@@ -125,15 +174,23 @@ export interface FileRoutesByFullPath {
   '/profile': typeof ProfileRoute
   '/signin': typeof SigninRoute
   '/signup': typeof SignupRoute
+  '/api/admin': typeof ApiAdminRouteWithChildren
+  '/api/community': typeof ApiCommunityRouteWithChildren
   '/api/groceries': typeof ApiGroceriesRoute
   '/api/search': typeof ApiSearchRoute
+  '/api/tickets': typeof ApiTicketsRoute
+  '/api/admin/community': typeof ApiAdminCommunityRoute
+  '/api/admin/operations': typeof ApiAdminOperationsRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/profile': typeof ApiAuthProfileRoute
   '/api/auth/signup': typeof ApiAuthSignupRoute
+  '/api/community/activity': typeof ApiCommunityActivityRoute
+  '/api/admin/users/$userId': typeof ApiAdminUsersUserIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/availability': typeof AvailabilityRoute
   '/cart': typeof CartRoute
   '/chat': typeof ChatRoute
@@ -144,16 +201,24 @@ export interface FileRoutesByTo {
   '/profile': typeof ProfileRoute
   '/signin': typeof SigninRoute
   '/signup': typeof SignupRoute
+  '/api/admin': typeof ApiAdminRouteWithChildren
+  '/api/community': typeof ApiCommunityRouteWithChildren
   '/api/groceries': typeof ApiGroceriesRoute
   '/api/search': typeof ApiSearchRoute
+  '/api/tickets': typeof ApiTicketsRoute
+  '/api/admin/community': typeof ApiAdminCommunityRoute
+  '/api/admin/operations': typeof ApiAdminOperationsRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/profile': typeof ApiAuthProfileRoute
   '/api/auth/signup': typeof ApiAuthSignupRoute
+  '/api/community/activity': typeof ApiCommunityActivityRoute
+  '/api/admin/users/$userId': typeof ApiAdminUsersUserIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/availability': typeof AvailabilityRoute
   '/cart': typeof CartRoute
   '/chat': typeof ChatRoute
@@ -164,17 +229,25 @@ export interface FileRoutesById {
   '/profile': typeof ProfileRoute
   '/signin': typeof SigninRoute
   '/signup': typeof SignupRoute
+  '/api/admin': typeof ApiAdminRouteWithChildren
+  '/api/community': typeof ApiCommunityRouteWithChildren
   '/api/groceries': typeof ApiGroceriesRoute
   '/api/search': typeof ApiSearchRoute
+  '/api/tickets': typeof ApiTicketsRoute
+  '/api/admin/community': typeof ApiAdminCommunityRoute
+  '/api/admin/operations': typeof ApiAdminOperationsRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/profile': typeof ApiAuthProfileRoute
   '/api/auth/signup': typeof ApiAuthSignupRoute
+  '/api/community/activity': typeof ApiCommunityActivityRoute
+  '/api/admin/users/$userId': typeof ApiAdminUsersUserIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin'
     | '/availability'
     | '/cart'
     | '/chat'
@@ -185,15 +258,23 @@ export interface FileRouteTypes {
     | '/profile'
     | '/signin'
     | '/signup'
+    | '/api/admin'
+    | '/api/community'
     | '/api/groceries'
     | '/api/search'
+    | '/api/tickets'
+    | '/api/admin/community'
+    | '/api/admin/operations'
     | '/api/auth/login'
     | '/api/auth/logout'
     | '/api/auth/profile'
     | '/api/auth/signup'
+    | '/api/community/activity'
+    | '/api/admin/users/$userId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/admin'
     | '/availability'
     | '/cart'
     | '/chat'
@@ -204,15 +285,23 @@ export interface FileRouteTypes {
     | '/profile'
     | '/signin'
     | '/signup'
+    | '/api/admin'
+    | '/api/community'
     | '/api/groceries'
     | '/api/search'
+    | '/api/tickets'
+    | '/api/admin/community'
+    | '/api/admin/operations'
     | '/api/auth/login'
     | '/api/auth/logout'
     | '/api/auth/profile'
     | '/api/auth/signup'
+    | '/api/community/activity'
+    | '/api/admin/users/$userId'
   id:
     | '__root__'
     | '/'
+    | '/admin'
     | '/availability'
     | '/cart'
     | '/chat'
@@ -223,16 +312,24 @@ export interface FileRouteTypes {
     | '/profile'
     | '/signin'
     | '/signup'
+    | '/api/admin'
+    | '/api/community'
     | '/api/groceries'
     | '/api/search'
+    | '/api/tickets'
+    | '/api/admin/community'
+    | '/api/admin/operations'
     | '/api/auth/login'
     | '/api/auth/logout'
     | '/api/auth/profile'
     | '/api/auth/signup'
+    | '/api/community/activity'
+    | '/api/admin/users/$userId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRoute
   AvailabilityRoute: typeof AvailabilityRoute
   CartRoute: typeof CartRoute
   ChatRoute: typeof ChatRoute
@@ -243,8 +340,11 @@ export interface RootRouteChildren {
   ProfileRoute: typeof ProfileRoute
   SigninRoute: typeof SigninRoute
   SignupRoute: typeof SignupRoute
+  ApiAdminRoute: typeof ApiAdminRouteWithChildren
+  ApiCommunityRoute: typeof ApiCommunityRouteWithChildren
   ApiGroceriesRoute: typeof ApiGroceriesRoute
   ApiSearchRoute: typeof ApiSearchRoute
+  ApiTicketsRoute: typeof ApiTicketsRoute
   ApiAuthLoginRoute: typeof ApiAuthLoginRoute
   ApiAuthLogoutRoute: typeof ApiAuthLogoutRoute
   ApiAuthProfileRoute: typeof ApiAuthProfileRoute
@@ -323,11 +423,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AvailabilityRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/tickets': {
+      id: '/api/tickets'
+      path: '/api/tickets'
+      fullPath: '/api/tickets'
+      preLoaderRoute: typeof ApiTicketsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/search': {
@@ -343,6 +457,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/groceries'
       preLoaderRoute: typeof ApiGroceriesRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/api/community': {
+      id: '/api/community'
+      path: '/api/community'
+      fullPath: '/api/community'
+      preLoaderRoute: typeof ApiCommunityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/admin': {
+      id: '/api/admin'
+      path: '/api/admin'
+      fullPath: '/api/admin'
+      preLoaderRoute: typeof ApiAdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/community/activity': {
+      id: '/api/community/activity'
+      path: '/activity'
+      fullPath: '/api/community/activity'
+      preLoaderRoute: typeof ApiCommunityActivityRouteImport
+      parentRoute: typeof ApiCommunityRoute
     }
     '/api/auth/signup': {
       id: '/api/auth/signup'
@@ -372,11 +507,61 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/admin/operations': {
+      id: '/api/admin/operations'
+      path: '/operations'
+      fullPath: '/api/admin/operations'
+      preLoaderRoute: typeof ApiAdminOperationsRouteImport
+      parentRoute: typeof ApiAdminRoute
+    }
+    '/api/admin/community': {
+      id: '/api/admin/community'
+      path: '/community'
+      fullPath: '/api/admin/community'
+      preLoaderRoute: typeof ApiAdminCommunityRouteImport
+      parentRoute: typeof ApiAdminRoute
+    }
+    '/api/admin/users/$userId': {
+      id: '/api/admin/users/$userId'
+      path: '/users/$userId'
+      fullPath: '/api/admin/users/$userId'
+      preLoaderRoute: typeof ApiAdminUsersUserIdRouteImport
+      parentRoute: typeof ApiAdminRoute
+    }
   }
 }
 
+interface ApiAdminRouteChildren {
+  ApiAdminCommunityRoute: typeof ApiAdminCommunityRoute
+  ApiAdminOperationsRoute: typeof ApiAdminOperationsRoute
+  ApiAdminUsersUserIdRoute: typeof ApiAdminUsersUserIdRoute
+}
+
+const ApiAdminRouteChildren: ApiAdminRouteChildren = {
+  ApiAdminCommunityRoute: ApiAdminCommunityRoute,
+  ApiAdminOperationsRoute: ApiAdminOperationsRoute,
+  ApiAdminUsersUserIdRoute: ApiAdminUsersUserIdRoute,
+}
+
+const ApiAdminRouteWithChildren = ApiAdminRoute._addFileChildren(
+  ApiAdminRouteChildren,
+)
+
+interface ApiCommunityRouteChildren {
+  ApiCommunityActivityRoute: typeof ApiCommunityActivityRoute
+}
+
+const ApiCommunityRouteChildren: ApiCommunityRouteChildren = {
+  ApiCommunityActivityRoute: ApiCommunityActivityRoute,
+}
+
+const ApiCommunityRouteWithChildren = ApiCommunityRoute._addFileChildren(
+  ApiCommunityRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRoute,
   AvailabilityRoute: AvailabilityRoute,
   CartRoute: CartRoute,
   ChatRoute: ChatRoute,
@@ -387,8 +572,11 @@ const rootRouteChildren: RootRouteChildren = {
   ProfileRoute: ProfileRoute,
   SigninRoute: SigninRoute,
   SignupRoute: SignupRoute,
+  ApiAdminRoute: ApiAdminRouteWithChildren,
+  ApiCommunityRoute: ApiCommunityRouteWithChildren,
   ApiGroceriesRoute: ApiGroceriesRoute,
   ApiSearchRoute: ApiSearchRoute,
+  ApiTicketsRoute: ApiTicketsRoute,
   ApiAuthLoginRoute: ApiAuthLoginRoute,
   ApiAuthLogoutRoute: ApiAuthLogoutRoute,
   ApiAuthProfileRoute: ApiAuthProfileRoute,

@@ -12,11 +12,13 @@ type LocationHit = {
 export function LocationPicker({
   value,
   onChange,
+  onQueryChange,
   label,
   required = false,
 }: {
   value?: UserLocation | null;
   onChange: (location: UserLocation | null) => void;
+  onQueryChange?: (query: string) => void;
   label: string;
   required?: boolean;
 }) {
@@ -27,6 +29,7 @@ export function LocationPicker({
 
   useEffect(() => {
     setQuery(value?.label ?? "");
+    onQueryChange?.(value?.label ?? "");
   }, [value?.label]);
 
   useEffect(() => {
@@ -107,7 +110,10 @@ export function LocationPicker({
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              onQueryChange?.(event.target.value);
+            }}
             onBlur={useManual}
             placeholder="Search suburb, address, or area"
             className="w-full rounded-xl border border-border bg-background py-2.5 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"

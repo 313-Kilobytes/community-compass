@@ -1,6 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { LayoutGrid, Search, BarChart3, MessageCircle, Sparkles, Siren, ShoppingBasket, ShoppingCart, Newspaper, UserRound } from "lucide-react";
+import { LayoutGrid, Search, BarChart3, MessageCircle, Sparkles, Siren, ShoppingBasket, ShoppingCart, Newspaper, UserRound, ShieldCheck } from "lucide-react";
 import { useT } from "@/lib/i18n";
+import { useAuth } from "@/lib/auth";
 
 const items = [
   { title: "nav.resources" as const, url: "/", icon: LayoutGrid },
@@ -14,9 +15,13 @@ const items = [
   { title: "nav.profile" as const, url: "/profile", icon: UserRound },
 ];
 
+const adminItem = { title: "nav.admin" as const, url: "/admin", icon: ShieldCheck };
+
 export function AppSidebar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { t } = useT();
+  const { user } = useAuth();
+  const visibleItems = user?.role === "super_admin" ? [...items, adminItem] : items;
   return (
     <aside className="hidden md:flex w-64 shrink-0 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border relative overflow-hidden">
       <div className="absolute inset-0 opacity-40 pointer-events-none" style={{ background: "radial-gradient(600px 300px at -20% -20%, color-mix(in oklab, var(--sidebar-primary) 35%, transparent), transparent 60%)" }} />
@@ -30,7 +35,7 @@ export function AppSidebar() {
         </div>
       </div>
       <nav className="relative flex-1 p-3 space-y-1">
-        {items.map((it) => {
+        {visibleItems.map((it) => {
           const active = pathname === it.url;
           return (
             <Link
@@ -61,9 +66,11 @@ export function AppSidebar() {
 export function MobileNav() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { t } = useT();
+  const { user } = useAuth();
+  const visibleItems = user?.role === "super_admin" ? [...items, adminItem] : items;
   return (
     <nav className="md:hidden fixed bottom-3 inset-x-3 glass border border-border rounded-2xl shadow-elegant flex gap-1 overflow-x-auto py-2 px-2 z-50">
-      {items.map((it) => {
+      {visibleItems.map((it) => {
         const active = pathname === it.url;
         return (
           <Link
