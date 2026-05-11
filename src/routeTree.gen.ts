@@ -21,6 +21,7 @@ import { Route as CartRouteImport } from './routes/cart'
 import { Route as AvailabilityRouteImport } from './routes/availability'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiSearchRouteImport } from './routes/api/search'
+import { Route as ApiReviewIntelligenceRouteImport } from './routes/api/review-intelligence'
 import { Route as ApiGroceriesRouteImport } from './routes/api/groceries'
 import { Route as ApiAuthSignupRouteImport } from './routes/api/auth/signup'
 import { Route as ApiAuthProfileRouteImport } from './routes/api/auth/profile'
@@ -87,6 +88,11 @@ const ApiSearchRoute = ApiSearchRouteImport.update({
   path: '/api/search',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiReviewIntelligenceRoute = ApiReviewIntelligenceRouteImport.update({
+  id: '/api/review-intelligence',
+  path: '/api/review-intelligence',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiGroceriesRoute = ApiGroceriesRouteImport.update({
   id: '/api/groceries',
   path: '/api/groceries',
@@ -126,6 +132,7 @@ export interface FileRoutesByFullPath {
   '/signin': typeof SigninRoute
   '/signup': typeof SignupRoute
   '/api/groceries': typeof ApiGroceriesRoute
+  '/api/review-intelligence': typeof ApiReviewIntelligenceRoute
   '/api/search': typeof ApiSearchRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
@@ -145,6 +152,7 @@ export interface FileRoutesByTo {
   '/signin': typeof SigninRoute
   '/signup': typeof SignupRoute
   '/api/groceries': typeof ApiGroceriesRoute
+  '/api/review-intelligence': typeof ApiReviewIntelligenceRoute
   '/api/search': typeof ApiSearchRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
@@ -165,6 +173,7 @@ export interface FileRoutesById {
   '/signin': typeof SigninRoute
   '/signup': typeof SignupRoute
   '/api/groceries': typeof ApiGroceriesRoute
+  '/api/review-intelligence': typeof ApiReviewIntelligenceRoute
   '/api/search': typeof ApiSearchRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
@@ -186,6 +195,7 @@ export interface FileRouteTypes {
     | '/signin'
     | '/signup'
     | '/api/groceries'
+    | '/api/review-intelligence'
     | '/api/search'
     | '/api/auth/login'
     | '/api/auth/logout'
@@ -205,6 +215,7 @@ export interface FileRouteTypes {
     | '/signin'
     | '/signup'
     | '/api/groceries'
+    | '/api/review-intelligence'
     | '/api/search'
     | '/api/auth/login'
     | '/api/auth/logout'
@@ -224,6 +235,7 @@ export interface FileRouteTypes {
     | '/signin'
     | '/signup'
     | '/api/groceries'
+    | '/api/review-intelligence'
     | '/api/search'
     | '/api/auth/login'
     | '/api/auth/logout'
@@ -244,6 +256,7 @@ export interface RootRouteChildren {
   SigninRoute: typeof SigninRoute
   SignupRoute: typeof SignupRoute
   ApiGroceriesRoute: typeof ApiGroceriesRoute
+  ApiReviewIntelligenceRoute: typeof ApiReviewIntelligenceRoute
   ApiSearchRoute: typeof ApiSearchRoute
   ApiAuthLoginRoute: typeof ApiAuthLoginRoute
   ApiAuthLogoutRoute: typeof ApiAuthLogoutRoute
@@ -337,6 +350,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSearchRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/review-intelligence': {
+      id: '/api/review-intelligence'
+      path: '/api/review-intelligence'
+      fullPath: '/api/review-intelligence'
+      preLoaderRoute: typeof ApiReviewIntelligenceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/groceries': {
       id: '/api/groceries'
       path: '/api/groceries'
@@ -388,6 +408,7 @@ const rootRouteChildren: RootRouteChildren = {
   SigninRoute: SigninRoute,
   SignupRoute: SignupRoute,
   ApiGroceriesRoute: ApiGroceriesRoute,
+  ApiReviewIntelligenceRoute: ApiReviewIntelligenceRoute,
   ApiSearchRoute: ApiSearchRoute,
   ApiAuthLoginRoute: ApiAuthLoginRoute,
   ApiAuthLogoutRoute: ApiAuthLogoutRoute,
