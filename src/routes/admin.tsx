@@ -579,7 +579,9 @@ function AdminPage() {
                 <KeyRound className="mt-0.5 h-4 w-4 text-primary" />
                 <div>
                   <div className="text-sm font-semibold">{log.action}</div>
-                  <div className="text-xs text-muted-foreground">{log.detail} · {log.time}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {log.detail} · {"time" in log ? log.time : formatDate(log.createdAt)}
+                  </div>
                 </div>
               </div>
             ))}
@@ -776,6 +778,65 @@ function ProgressRow({ label, value, max }: { label: string; value: number; max:
   );
 }
 
+function TicketAdminRow({
+  ticket,
+  response,
+  onResponseChange,
+  onSave,
+}: {
+  ticket: AdminTicket;
+  response: string;
+  onResponseChange: (value: string) => void;
+  onSave: (patch: Partial<Pick<AdminTicket, "status" | "priority" | "adminResponse">>) => void;
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-background/60 p-3">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div className="text-sm font-semibold">{ticket.subject}</div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            {ticket.username} · {ticket.category} · opened {formatDate(ticket.createdAt)}
+          </div>
+          <p className="mt-2 text-sm text-muted-foreground">{ticket.message}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <select
+            value={ticket.status}
+            onChange={(event) => onSave({ status: event.target.value as TicketStatus })}
+            className="rounded-lg border border-border bg-card px-2 py-1 text-xs font-semibold"
+          >
+            {ticketStatuses.map((status) => (
+              <option key={status} value={status}>
+                {status}
+              </option>
+            ))}
+          </select>
+          <select
+            value={ticket.priority}
+            onChange={(event) => onSave({ priority: event.target.value as TicketPriority })}
+            className="rounded-lg border border-border bg-card px-2 py-1 text-xs font-semibold"
+          >
+            {ticketPriorities.map((priority) => (
+              <option key={priority} value={priority}>
+                {priority}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <textarea
+        value={response}
+        onChange={(event) => onResponseChange(event.target.value)}
+        className="mt-3 min-h-20 w-full rounded-lg border border-border bg-card p-3 text-sm"
+        placeholder="Admin response"
+      />
+      <div className="mt-2 flex justify-end">
+        <MiniButton onClick={() => onSave({ adminResponse: response })}>Save response</MiniButton>
+      </div>
+    </div>
+  );
+}
+
 function InfoList({ items }: { items: string[] }) {
   return (
     <div className="space-y-2">
@@ -840,7 +901,7 @@ function buildAuditLogs(users: UserProfile[], posts: CommunityPost[], comments: 
   ];
 }
 
-function defaultIncidentStatus(analysis: IncidentAnalysis): IncidentStatus {
+function defaultIncidentStatus(analysis: IncidentAnalysis): AdminIncidentStatus {
   if (analysis.severity === "High" && analysis.trust >= 70) return "Verified";
   if (analysis.trust < 55) return "Under Review";
   return "Under Review";
@@ -863,4 +924,14 @@ function recentLoginLabel(createdAt: string) {
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString();
+}
+
+function downloadJson(filename: string, data: unknown) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 }

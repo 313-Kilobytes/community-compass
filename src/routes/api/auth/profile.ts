@@ -60,7 +60,7 @@ export const Route = createFileRoute("/api/auth/profile")({
           username: typeof body.username === "string" ? body.username.trim() : undefined,
           fullName: validateName(body.fullName),
           currentLocation,
-          permanentLocation,
+          permanentLocation: permanentLocation ?? undefined,
           profilePicture: validateProfilePicture(body.profilePicture),
         });
 
