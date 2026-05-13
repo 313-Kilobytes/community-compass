@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { getAdminOperations, setUserStatus, type AdminUserStatus } from "@/lib/server/admin-store";
+import { auditAdminAction, getAdminOperations, setUserStatus, type AdminUserStatus } from "@/lib/server/admin-store";
 import { deleteUser, json, requireSuperAdmin, updateUserRole, type UserRole } from "@/lib/server/auth";
 
 export const Route = createFileRoute("/api/admin/users/$userId")({
@@ -21,6 +21,7 @@ export const Route = createFileRoute("/api/admin/users/$userId")({
         if (body.role) {
           userResult = await updateUserRole(params.userId, body.role as UserRole);
           if (userResult.error || !userResult.user) return json({ error: userResult.error }, { status: 400 });
+          await auditAdminAction("User role updated", `${userResult.user.username} set to ${userResult.user.role ?? "user"}`, admin.user.username);
         }
         if (body.status) {
           const statusResult = await setUserStatus(params.userId, body.status as AdminUserStatus, admin.user.username);
@@ -35,6 +36,7 @@ export const Route = createFileRoute("/api/admin/users/$userId")({
 
         const result = await deleteUser(params.userId);
         if (result.error) return json({ error: result.error }, { status: 400 });
+        await auditAdminAction("User deleted", `${params.userId} removed from the system`, admin.user.username);
         return json({ ok: true });
       },
     },

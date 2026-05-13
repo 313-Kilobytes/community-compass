@@ -6,6 +6,7 @@ import {
   getAdminOperations,
   setAiSensitivity,
   setIncidentStatus,
+  syncExternalAlerts,
   updateTicket,
   type AdminIncidentStatus,
   type TicketPriority,
@@ -39,6 +40,7 @@ export const Route = createFileRoute("/api/admin/operations")({
           | Awaited<ReturnType<typeof setIncidentStatus>>
           | Awaited<ReturnType<typeof setAiSensitivity>>
           | Awaited<ReturnType<typeof createBroadcast>>
+          | Awaited<ReturnType<typeof syncExternalAlerts>>
           | Awaited<ReturnType<typeof addCategory>>
           | Awaited<ReturnType<typeof addKeyword>>
           | Awaited<ReturnType<typeof updateTicket>>;
@@ -50,6 +52,8 @@ export const Route = createFileRoute("/api/admin/operations")({
         } else if (body.type === "broadcast") {
           const region = CAPE_TOWN_REGIONS.includes(body.region as CapeTownRegion) ? (body.region as CapeTownRegion) : "CBD & City Bowl";
           result = await createBroadcast(region, String(body.alertType ?? "General"), String(body.message ?? ""), actor);
+        } else if (body.type === "sync_external_alerts") {
+          result = await syncExternalAlerts(actor);
         } else if (body.type === "category") {
           result = await addCategory(String(body.value ?? ""), actor);
         } else if (body.type === "keyword") {

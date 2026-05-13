@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { LockKeyhole, UserPlus, UserRound } from "lucide-react";
+import { LockKeyhole, RotateCcwKey, UserPlus, UserRound } from "lucide-react";
 import { useMemo, useState } from "react";
 import { LocationPicker } from "@/components/LocationPicker";
 import { useAuth, type UserLocation } from "@/lib/auth";
@@ -111,10 +111,12 @@ export function SignUpForm() {
 }
 
 export function SignInForm() {
-  const { login, error, clearError } = useAuth();
+  const { login, resetPassword, error, clearError } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [resetMode, setResetMode] = useState(false);
+  const [resetPasswordValue, setResetPasswordValue] = useState("");
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
@@ -137,25 +139,46 @@ export function SignInForm() {
       setLocalError("Please enter a proper email address, for example name@example.com.");
       return;
     }
-    if (!password) {
+    if (!resetMode && !password) {
       setLocalError("Password is required.");
+      return;
+    }
+    if (resetMode) {
+      const weakPassword = passwordError(resetPasswordValue);
+      if (weakPassword) {
+        setLocalError(weakPassword);
+        return;
+      }
+      setBusy(true);
+      const ok = await resetPassword(email, resetPasswordValue);
+      setBusy(false);
+      if (ok) await navigate({ to: "/feed" });
       return;
     }
     setBusy(true);
     const ok = await login(email, password);
     setBusy(false);
-    if (ok) await navigate({ to: "/profile" });
+    if (ok) await navigate({ to: "/feed" });
   };
 
   return (
     <form onSubmit={submit} className="rounded-2xl border border-border bg-card p-5 shadow-card">
       <h2 className="flex items-center gap-2 font-display text-xl font-semibold">
-        <UserRound className="h-5 w-5 text-primary" /> Sign in
+        {resetMode ? <RotateCcwKey className="h-5 w-5 text-primary" /> : <UserRound className="h-5 w-5 text-primary" />} {resetMode ? "Reset password" : "Sign in"}
       </h2>
-      <p className="mt-1 text-sm text-muted-foreground">Enter your email address and password.</p>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {resetMode ? "Enter your email address and choose a new secure password." : "Enter your email address and password."}
+      </p>
       <div className="mt-4 grid gap-3">
         <TextInput value={email} onChange={setEmail} label="Email" type="email" autoComplete="email" required hint={emailProblem} />
-        <TextInput value={password} onChange={setPassword} label="Password" type="password" autoComplete="current-password" required />
+        {resetMode ? (
+          <>
+            <TextInput value={resetPasswordValue} onChange={setResetPasswordValue} label="New password" type="password" autoComplete="new-password" required />
+            <PasswordGuide password={resetPasswordValue} />
+          </>
+        ) : (
+          <TextInput value={password} onChange={setPassword} label="Password" type="password" autoComplete="current-password" required />
+        )}
       </div>
       {(localError || error) && <p className="mt-3 text-xs font-semibold text-destructive">{localError || error}</p>}
       <button
@@ -163,7 +186,18 @@ export function SignInForm() {
         disabled={busy}
         className="mt-4 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
       >
-        <LockKeyhole className="h-4 w-4" /> {busy ? "Signing in..." : "Sign in"}
+        <LockKeyhole className="h-4 w-4" /> {busy ? (resetMode ? "Resetting..." : "Signing in...") : resetMode ? "Reset password" : "Sign in"}
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          clearError();
+          setLocalError(null);
+          setResetMode((current) => !current);
+        }}
+        className="mt-3 w-full text-center text-sm font-semibold text-primary"
+      >
+        {resetMode ? "Back to sign in" : "Forgot password?"}
       </button>
       <p className="mt-4 text-center text-sm text-muted-foreground">
         New here? <Link to="/signup" className="font-semibold text-primary">Create an account</Link>

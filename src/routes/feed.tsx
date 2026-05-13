@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
@@ -49,6 +49,7 @@ import {
 } from "@/lib/community";
 import { useAuth } from "@/lib/auth";
 import { useT } from "@/lib/i18n";
+import type { AdminBroadcast } from "@/lib/server/admin-store";
 
 type LocationHit = {
   label: string;
@@ -114,6 +115,7 @@ function FeedPage() {
   const [regionalFilter, setRegionalFilter] = useState<CapeTownRegion>("CBD & City Bowl");
   const [liveTick, setLiveTick] = useState(0);
   const [activeCounts, setActiveCounts] = useState<Partial<Record<CapeTownRegion, number>>>({});
+  const [localAlerts, setLocalAlerts] = useState<AdminBroadcast[]>([]);
 
   useEffect(() => {
     const query = area.trim();
@@ -255,6 +257,29 @@ function FeedPage() {
     };
   }, [user]);
 
+  useEffect(() => {
+    if (!user) {
+      setLocalAlerts([]);
+      return;
+    }
+
+    let cancelled = false;
+    const loadLocalAlerts = async () => {
+      const params = new URLSearchParams({ region: regionalFilter });
+      const response = await fetch(`/api/broadcasts?${params.toString()}`, { credentials: "include" }).catch(() => null);
+      if (cancelled || !response?.ok) return;
+      const data = (await response.json().catch(() => ({}))) as { broadcasts?: AdminBroadcast[] };
+      setLocalAlerts(data.broadcasts ?? []);
+    };
+
+    void loadLocalAlerts();
+    const timer = window.setInterval(loadLocalAlerts, 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [regionalFilter, user]);
+
   const canPost = message.trim().length > 0 || image;
   const draftAnalysis = useMemo(() => analyzeIncident(message, Boolean(image)), [message, image]);
 
@@ -296,10 +321,10 @@ function FeedPage() {
   );
 
   const liveActivity = useMemo(() => {
-    const alerts = selectedRegionalThread.posts.filter((post) => post.category === "Alert" || post.category === "Safety Issue").length;
+    const alerts = selectedRegionalThread.posts.filter((post) => post.category === "Alert" || post.category === "Safety Issue").length + localAlerts.length;
     const active = activeCounts[selectedRegionalThread.region] ?? 0;
     return [{ region: selectedRegionalThread.region, alerts, active }];
-  }, [activeCounts, liveTick, selectedRegionalThread]);
+  }, [activeCounts, liveTick, localAlerts.length, selectedRegionalThread]);
 
   const broadcastCommunityChange = () => {
     if ("BroadcastChannel" in window) {
@@ -497,166 +522,21 @@ function FeedPage() {
         </div>
       </section>
 
-      <div className="grid lg:grid-cols-[380px_1fr] gap-6 items-start">
-        <form onSubmit={addPost} className="bg-card border border-border rounded-2xl p-5 shadow-card sticky top-6">
-          <div className="flex items-center gap-2 mb-4">
-            <MessageSquareText className="h-4 w-4 text-primary" />
-            <h2 className="font-display font-semibold">{t("feed.compose")}</h2>
-          </div>
-
-          <div className="grid sm:grid-cols-2 lg:grid-cols-1 gap-3">
-            {!anonymous && (
-              <input
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder={t("feed.name")}
-                className="w-full px-3 py-2.5 rounded-xl bg-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-            )}
-            <div className="relative">
-              <MapPin className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input
-                value={area}
-                onChange={(event) => setArea(event.target.value)}
-                placeholder="Address, suburb, or location"
-                className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              />
+      <div className="space-y-4">
+        <section className="rounded-2xl border border-border bg-card p-4 shadow-card">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="font-display font-semibold">{t("feed.compose")}</h2>
+              <p className="text-xs text-muted-foreground">Create updates on a dedicated page so the feed stays easy to scan.</p>
             </div>
-            <select
-              value={region}
-              onChange={(event) => setRegion(event.target.value as CapeTownRegion)}
-              className="w-full px-3 py-2.5 rounded-xl bg-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              aria-label="Region Group"
+            <Link
+              to="/create-post"
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground"
             >
-              {CAPE_TOWN_REGIONS.map((item) => (
-                <option key={item} value={item}>{item}</option>
-              ))}
-            </select>
-            <select
-              value={category}
-              onChange={(event) => setCategory(event.target.value as PostCategory)}
-              className="w-full px-3 py-2.5 rounded-xl bg-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              aria-label="Post category"
-            >
-              {POST_CATEGORIES.map((item) => (
-                <option key={item} value={item}>{item}</option>
-              ))}
-            </select>
+              <MessageSquareText className="h-4 w-4" /> Create post
+            </Link>
           </div>
-          <div className="mt-2 rounded-xl border border-border bg-secondary/40 px-3 py-2 text-xs text-muted-foreground">
-            Suggested region: <span className="font-semibold text-foreground">{region}</span>
-          </div>
-          <label className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-border bg-secondary/50 px-3 py-2 text-xs font-semibold">
-            <span className="inline-flex items-center gap-1.5">
-              <EyeOff className="h-3.5 w-3.5 text-muted-foreground" /> Stay anonymous
-            </span>
-            <input
-              type="checkbox"
-              checked={anonymous}
-              onChange={(event) => setAnonymous(event.target.checked)}
-              className="h-4 w-4 accent-primary"
-            />
-          </label>
-          {(locationSearching || locationError || locationHits.length > 0 || coords) && (
-            <div className="mt-3 rounded-xl border border-border bg-background/70 p-3">
-              <div className="flex items-center justify-between gap-3 text-xs">
-                <span className="font-semibold">Location match</span>
-                {locationSearching && <span className="text-muted-foreground">Searching...</span>}
-                {coords && <span className="text-muted-foreground">{coords.lat}, {coords.lng}</span>}
-              </div>
-              {locationError && <div className="mt-2 text-xs text-destructive">{locationError}</div>}
-              {locationHits.length > 0 && (
-                <div className="mt-2 space-y-1">
-                  {locationHits.map((hit) => (
-                    <button
-                      key={`${hit.lat}-${hit.lng}-${hit.label}`}
-                      type="button"
-                      onClick={() => chooseLocation(hit)}
-                      className="block w-full rounded-lg px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
-                    >
-                      {hit.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={useCurrentLocation}
-            className="mt-3 w-full inline-flex items-center justify-center gap-1.5 rounded-xl border border-border bg-secondary px-3 py-2 text-xs font-semibold text-secondary-foreground hover:bg-muted"
-          >
-            <LocateFixed className="h-3.5 w-3.5" /> {coords ? `Location saved: ${coords.lat}, ${coords.lng}` : "Use Current Location"}
-          </button>
-          <button
-            type="button"
-            onClick={dropPin}
-            className="mt-3 relative h-40 w-full overflow-hidden rounded-xl border border-border bg-[linear-gradient(135deg,rgba(15,23,42,.08),rgba(15,23,42,.02))] text-left"
-            aria-label="Drop a pin on the map"
-          >
-            <div className="absolute inset-0 opacity-25 [background-image:linear-gradient(to_right,currentColor_1px,transparent_1px),linear-gradient(to_bottom,currentColor_1px,transparent_1px)] [background-size:28px_28px]" />
-            <div className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-card/85 px-2.5 py-1 text-[11px] font-semibold shadow-card">
-              <MousePointer2 className="h-3.5 w-3.5 text-primary" /> Click map to drop pin
-            </div>
-            {coords && (
-              <span
-                className="absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-red-500 ring-8 ring-red-500/20"
-                style={{ left: `${((coords.lng + 180) / 360) * 100}%`, top: `${((90 - coords.lat) / 180) * 100}%` }}
-              />
-            )}
-          </button>
-
-          <textarea
-            value={message}
-            onChange={(event) => setMessage(event.target.value)}
-            placeholder={t("feed.message")}
-            className="mt-3 min-h-32 w-full resize-none px-3 py-3 rounded-xl bg-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          />
-
-          {image && (
-            <div className="mt-3 overflow-hidden rounded-xl border border-border bg-secondary/40">
-              <img src={image} alt={t("feed.preview")} className="max-h-56 w-full object-cover" />
-              <button
-                type="button"
-                onClick={() => setImage(undefined)}
-                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-destructive hover:bg-destructive/10"
-              >
-                <Trash2 className="h-3.5 w-3.5" /> {t("feed.removeImage")}
-              </button>
-            </div>
-          )}
-
-          {canPost && <AnalysisPanel analysis={draftAnalysis} compact />}
-
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            onChange={(event) => handleImage(event.target.files?.[0])}
-          />
-
-          <div className="mt-4 flex flex-col sm:flex-row lg:flex-col xl:flex-row gap-2">
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              className="inline-flex flex-1 items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-secondary text-secondary-foreground text-sm font-semibold hover:bg-muted transition-colors"
-            >
-              <ImagePlus className="h-4 w-4" /> {t("feed.screenshot")}
-            </button>
-            <button
-              type="submit"
-              disabled={!canPost}
-              className="inline-flex flex-1 items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-primary-foreground text-sm font-semibold shadow-elegant disabled:opacity-50"
-              style={{ background: "var(--gradient-primary)" }}
-            >
-              <Send className="h-4 w-4" /> {t("feed.post")}
-            </button>
-          </div>
-
-          <p className="mt-3 text-xs text-muted-foreground">{t("feed.localOnly")}</p>
-        </form>
+        </section>
 
         <div className="space-y-4">
           <section className="bg-card border border-border rounded-2xl p-4 shadow-card">
@@ -706,7 +586,6 @@ function FeedPage() {
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
                 <h2 className="font-display font-semibold">Cape Town Regional Groups</h2>
-                <p className="text-xs text-muted-foreground">Switch regions without changing the discussion card layout.</p>
               </div>
               <select
                 value={regionalFilter}
@@ -728,6 +607,7 @@ function FeedPage() {
               onLike={(commentId) => likeAreaComment(selectedRegionalThread.region, commentId)}
               onUnlike={(commentId) => unlikeAreaComment(selectedRegionalThread.region, commentId)}
               onDeleteComment={(commentId) => deleteAreaComment(selectedRegionalThread.region, commentId)}
+              localAlerts={localAlerts}
             />
           </section>
 
@@ -949,6 +829,7 @@ function AreaCard({
   onLike,
   onUnlike,
   onDeleteComment,
+  localAlerts,
 }: {
   thread: AreaThread;
   currentAuthor: string;
@@ -957,10 +838,12 @@ function AreaCard({
   onLike: (commentId: string) => void;
   onUnlike: (commentId: string) => void;
   onDeleteComment: (commentId: string) => void;
+  localAlerts: AdminBroadcast[];
 }) {
   const [comment, setComment] = useState("");
   const [expanded, setExpanded] = useState(thread.posts.length > 0);
-  const alertCount = thread.posts.filter((post) => post.category === "Alert" || post.category === "Safety Issue").length;
+  const [alertsExpanded, setAlertsExpanded] = useState(false);
+  const alertCount = thread.posts.filter((post) => post.category === "Alert" || post.category === "Safety Issue").length + localAlerts.length;
   const commentCount = countComments(thread.comments);
   const trending = summarizeTrending(thread);
   const active = thread.posts.length + thread.chats.length + commentCount > 0;
@@ -993,9 +876,45 @@ function AreaCard({
 
       <div className="mt-4 grid sm:grid-cols-3 gap-2">
         <Signal label="Trending" value={trending} icon={MessageSquareText} />
-        <Signal label="Local alerts" value={String(alertCount)} icon={Bell} />
+        <button
+          type="button"
+          onClick={() => setAlertsExpanded((current) => !current)}
+          className="rounded-lg bg-background/70 border border-border px-3 py-2 text-left hover:bg-muted"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Bell className="h-3.5 w-3.5" /> Local alerts
+            </span>
+            <span className="text-sm font-bold tabular-nums truncate">{alertCount}</span>
+          </div>
+        </button>
         <Signal label="Engagement" value={String(thread.posts.length + commentCount + thread.chats.length)} icon={UsersRound} />
       </div>
+
+      {alertsExpanded && (
+        <div className="mt-4 grid gap-3">
+          {localAlerts.length > 0 ? (
+            localAlerts.slice(0, 4).map((alert) => (
+              <article key={alert.id} className="rounded-xl border border-destructive/20 bg-destructive/5 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm font-semibold">{alert.type}</span>
+                  <span className="text-[11px] text-muted-foreground">{new Date(alert.createdAt).toLocaleString()}</span>
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">{alert.message}</p>
+                {alert.source && (
+                  <a href={alert.source} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-xs font-semibold text-primary">
+                    View source
+                  </a>
+                )}
+              </article>
+            ))
+          ) : (
+            <div className="rounded-xl border border-dashed border-border bg-background/60 p-4 text-sm text-muted-foreground">
+              No local alerts for this region right now.
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="mt-4 flex flex-wrap gap-2">
         <button

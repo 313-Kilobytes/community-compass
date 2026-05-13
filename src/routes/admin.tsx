@@ -24,6 +24,7 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Tag,
+  Ticket,
   Trash2,
   UserCheck,
   UserCog,
@@ -88,6 +89,7 @@ function AdminPage() {
   const [selectedBroadcastRegion, setSelectedBroadcastRegion] = useState<CapeTownRegion>("Cape Flats");
   const [broadcastType, setBroadcastType] = useState("Crime alert");
   const [broadcastMessage, setBroadcastMessage] = useState("Emergency alert: verified community warning. Stay clear of affected streets and follow official updates.");
+  const [broadcastNotice, setBroadcastNotice] = useState<string | null>(null);
   const [newCategory, setNewCategory] = useState("");
   const [newKeyword, setNewKeyword] = useState("");
   const [ticketResponses, setTicketResponses] = useState<Record<string, string>>({});
@@ -115,6 +117,7 @@ function AdminPage() {
 
   const regionRows = useMemo(() => buildRegionRows(data), [data]);
   const trending = useMemo(() => buildTrending(analyzedPosts), [analyzedPosts]);
+  const trendTimeline = useMemo(() => buildTrendTimeline(posts, comments, chats), [posts, comments, chats]);
   const auditLogs = data?.operations.auditLogs ?? buildAuditLogs(data?.users ?? [], posts, comments);
   const reportedComments = comments.filter((comment) => isReportedText(comment.text));
   const aiFlaggedPosts = analyzedPosts.filter(({ analysis }) => analysis.severity === "High" || analysis.trust >= aiSensitivity || analysis.panic >= 60);
@@ -159,15 +162,15 @@ function AdminPage() {
         headers: { "Content-Type": "application/json", ...(await authHeaders()) },
         body: JSON.stringify(body),
       });
-      const result = (await response.json().catch(() => ({}))) as { operations?: AdminOperations; error?: string };
+      const result = (await response.json().catch(() => ({}))) as { operations?: AdminOperations; error?: string; created?: number };
       if (!response.ok || !result.operations) throw new Error(result.error || "Admin operation failed.");
       updateOperations(result.operations);
       setStatus("ready");
-      return true;
+      return result;
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Admin operation failed.");
       setStatus("error");
-      return false;
+      return null;
     }
   };
 
@@ -407,7 +410,7 @@ function AdminPage() {
 
       {activeTab === "Content" && (
       <div>
-        <AdminSection title="Content & Community Management" icon={Newspaper} description="Remove unsafe posts, discussions, comments, and chat history.">
+        <AdminSection title="Content & Community Management" icon={Newspaper} description="Remove unsafe posts and reported comments while preserving history for accountability and analytics.">
           <div className="grid gap-4 lg:grid-cols-2">
             <ContentList title="Posts" empty="No stored posts yet.">
               {posts.slice(0, 6).map((post) => (
@@ -421,7 +424,6 @@ function AdminPage() {
             </ContentList>
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
-            <MiniButton onClick={() => void deleteCommunityItem("all")}>Clear history</MiniButton>
             <MiniButton onClick={() => downloadJson("community-takedown-queue.json", { posts, reportedComments })}>Export takedown queue</MiniButton>
             <MiniButton onClick={() => setActiveTab("AI")}>Open chat monitor</MiniButton>
           </div>
@@ -490,10 +492,21 @@ function AdminPage() {
             <Metric label="Engagement" value={stats.posts + stats.comments + stats.chats} icon={MessageCircle} />
             <Metric label="Peak hour" value={18} suffix=":00" icon={Clock3} />
           </div>
-          <div className="mt-4 space-y-3">
-            {trending.map((item) => (
-              <ProgressRow key={item.label} label={item.label} value={item.count} max={Math.max(1, trending[0]?.count ?? 1)} />
-            ))}
+          <div className="mt-4 space-y-4">
+            <TrendBars rows={trendTimeline} />
+            <div className="grid gap-3 md:grid-cols-2">
+              <ChartPanel title="Incident trends">
+                {trending.map((item) => (
+                  <ProgressRow key={item.label} label={item.label} value={item.count} max={Math.max(1, trending[0]?.count ?? 1)} />
+                ))}
+                {trending.length === 0 && <p className="text-sm text-muted-foreground">No incident trend data yet.</p>}
+              </ChartPanel>
+              <ChartPanel title="Regional use">
+                {regionRows.slice(0, 5).map((item) => (
+                  <ProgressRow key={item.name} label={item.name} value={item.posts + item.comments + item.active} max={Math.max(1, regionRows[0]?.posts + regionRows[0]?.comments + regionRows[0]?.active)} />
+                ))}
+              </ChartPanel>
+            </div>
           </div>
         </AdminSection>
       </div>
@@ -565,11 +578,43 @@ function AdminPage() {
           />
           <button
             type="button"
-            onClick={() => void runAdminOperation({ type: "broadcast", region: selectedBroadcastRegion, alertType: broadcastType, message: broadcastMessage })}
+            onClick={() => void runAdminOperation({ type: "broadcast", region: selectedBroadcastRegion, alertType: broadcastType, message: broadcastMessage }).then((result) => {
+              if (result) setBroadcastNotice(`Alert sent to ${selectedBroadcastRegion}. Users in that region will receive it in the app.`);
+            })}
             className="mt-3 inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground"
           >
             <Megaphone className="h-4 w-4" /> Send regional alert
           </button>
+          {broadcastNotice && <p className="mt-2 text-xs font-semibold text-success">{broadcastNotice}</p>}
+          <div className="mt-4 rounded-lg border border-border bg-background/60 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="text-sm font-semibold">Public alert intake</div>
+                <p className="text-xs text-muted-foreground">Imports public disaster alerts and prepares region-targeted in-app warnings.</p>
+              </div>
+              <MiniButton onClick={() => void runAdminOperation({ type: "sync_external_alerts" }).then((result) => {
+                if (result) setBroadcastNotice(`${result.created ?? 0} external alert${result.created === 1 ? "" : "s"} synced.`);
+              })}>
+                Sync public alerts
+              </MiniButton>
+            </div>
+          </div>
+        </AdminSection>
+
+        <AdminSection title="Broadcast Delivery Log" icon={RadioTower} description="Recent manual and public-source alerts visible to users in affected regions.">
+          <div className="space-y-2">
+            {(data?.operations.broadcasts ?? []).slice(0, 8).map((broadcast) => (
+              <div key={broadcast.id} className="rounded-lg border border-border bg-background/60 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-sm font-semibold">{broadcast.type} - {broadcast.region}</div>
+                  <div className="text-xs text-muted-foreground">{new Date(broadcast.createdAt).toLocaleString()}</div>
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">{broadcast.message}</p>
+                {broadcast.source && <a href={broadcast.source} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-xs font-semibold text-primary">View source</a>}
+              </div>
+            ))}
+            {(data?.operations.broadcasts ?? []).length === 0 && <p className="text-sm text-muted-foreground">No broadcasts have been sent yet.</p>}
+          </div>
         </AdminSection>
       </div>
       )}
@@ -595,7 +640,7 @@ function AdminPage() {
       )}
 
       {activeTab === "Tickets" && (
-      <AdminSection title="Support & Appeals" icon={Gavel} description="Manage user tickets, appeals, responses, priorities, and status tracking.">
+      <AdminSection title="Support & Appeals" icon={Ticket} description="Manage user tickets, appeals, responses, priorities, and status tracking.">
         <div className="space-y-3">
           {(data?.operations.tickets ?? []).map((ticket) => (
             <TicketAdminRow
@@ -782,6 +827,43 @@ function ProgressRow({ label, value, max }: { label: string; value: number; max:
   );
 }
 
+function ChartPanel({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border border-border bg-background/60 p-3">
+      <h3 className="mb-3 text-sm font-semibold">{title}</h3>
+      <div className="space-y-3">{children}</div>
+    </div>
+  );
+}
+
+function TrendBars({ rows }: { rows: { label: string; posts: number; comments: number; chats: number; total: number }[] }) {
+  const max = Math.max(1, ...rows.map((row) => row.total));
+  return (
+    <div className="rounded-lg border border-border bg-background/60 p-3">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold">7 day activity trend</h3>
+        <div className="flex gap-3 text-[11px] text-muted-foreground">
+          <span>Posts</span>
+          <span>Comments</span>
+          <span>Chats</span>
+        </div>
+      </div>
+      <div className="grid h-44 grid-cols-7 items-end gap-2">
+        {rows.map((row) => (
+          <div key={row.label} className="flex h-full flex-col justify-end gap-1">
+            <div className="flex min-h-2 flex-1 items-end overflow-hidden rounded-md bg-muted">
+              <div className="w-full bg-primary" style={{ height: row.posts ? `${Math.max(6, (row.posts / max) * 100)}%` : 0 }} />
+              <div className="w-full bg-success" style={{ height: row.comments ? `${Math.max(6, (row.comments / max) * 100)}%` : 0 }} />
+              <div className="w-full bg-warning" style={{ height: row.chats ? `${Math.max(6, (row.chats / max) * 100)}%` : 0 }} />
+            </div>
+            <div className="text-center text-[11px] font-semibold text-muted-foreground">{row.label}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function TicketAdminRow({
   ticket,
   response,
@@ -896,6 +978,30 @@ function buildTrending(analyzedPosts: { post: CommunityPost; analysis: IncidentA
     .slice(0, 5);
 }
 
+function buildTrendTimeline(posts: CommunityPost[], comments: CommunityComment[], chats: AdminData["community"]["chatSessions"]) {
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() - (6 - index));
+    const key = date.toISOString().slice(0, 10);
+    return { key, label: date.toLocaleDateString(undefined, { weekday: "short" }), posts: 0, comments: 0, chats: 0, total: 0 };
+  });
+  const byKey = new Map(days.map((day) => [day.key, day]));
+  for (const post of posts) {
+    const day = byKey.get(post.createdAt.slice(0, 10));
+    if (day) day.posts += 1;
+  }
+  for (const comment of comments) {
+    const day = byKey.get(comment.createdAt.slice(0, 10));
+    if (day) day.comments += 1;
+  }
+  for (const chat of chats) {
+    const day = byKey.get(chat.createdAt.slice(0, 10));
+    if (day) day.chats += 1;
+  }
+  return days.map((day) => ({ ...day, total: day.posts + day.comments + day.chats }));
+}
+
 function buildAuditLogs(users: UserProfile[], posts: CommunityPost[], comments: CommunityComment[]) {
   return [
     { id: "roles", action: "Role matrix reviewed", detail: `${users.length} user accounts available to administrators`, time: "Live" },
@@ -927,7 +1033,11 @@ function recentLoginLabel(createdAt: string) {
 }
 
 function formatDate(value: string) {
-  return new Date(value).toLocaleDateString();
+  return new Date(value).toLocaleString();
+}
+
+function formatDateTime(value: string) {
+  return new Date(value).toLocaleString();
 }
 
 function downloadJson(filename: string, data: unknown) {
