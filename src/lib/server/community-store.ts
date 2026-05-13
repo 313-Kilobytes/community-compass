@@ -2,12 +2,15 @@ import {
   CAPE_TOWN_REGIONS,
   detectCapeTownRegion,
   type CapeTownRegion,
+  type CommunityChatMessage,
   type CommunityChatSession,
   type CommunityComment,
   type CommunityPost,
   type CommunitySnapshot,
   type PostCategory,
 } from "@/lib/community";
+import { createServerSupabaseClient } from "@/lib/supabase";
+import type { Database, Json } from "@/lib/types/supabase";
 
 type ActiveUser = {
   userId: string;
@@ -16,73 +19,12 @@ type ActiveUser = {
   lastSeenAt: string;
 };
 
-type StoredCommunity = Omit<CommunitySnapshot, "activeCounts"> & {
-  activeUsers: ActiveUser[];
-};
+type CommunityPostRow = Database["public"]["Tables"]["community_posts"]["Row"];
+type CommunityCommentRow = Database["public"]["Tables"]["community_comments"]["Row"];
+type CommunityChatRow = Database["public"]["Tables"]["community_chat_sessions"]["Row"];
 
 const ACTIVE_WINDOW_MS = 2 * 60 * 1000;
 const POST_CATEGORIES: PostCategory[] = ["Alert", "Event", "Job", "Community Update", "Safety Issue"];
-
-const globalStore = globalThis as typeof globalThis & {
-  __communityStore?: StoredCommunity;
-  __communityStoreLoaded?: boolean;
-};
-
-function emptyStore(): StoredCommunity {
-  return {
-    posts: [],
-    chatSessions: [],
-    areaComments: {},
-    activeUsers: [],
-  };
-}
-
-function store() {
-  globalStore.__communityStore ??= emptyStore();
-  return globalStore.__communityStore;
-}
-
-async function communityStorePath() {
-  if (typeof process === "undefined" || !process.versions?.node) return null;
-  const path = await import("node:path");
-  return path.join(process.cwd(), ".data", "community-feed.json");
-}
-
-async function ensureCommunityLoaded() {
-  if (globalStore.__communityStoreLoaded) return;
-  globalStore.__communityStoreLoaded = true;
-
-  const filePath = await communityStorePath();
-  if (!filePath) return;
-
-  try {
-    const fs = await import("node:fs/promises");
-    const raw = await fs.readFile(filePath, "utf8");
-    const parsed = JSON.parse(raw) as Partial<StoredCommunity>;
-    globalStore.__communityStore = {
-      posts: sanitizePosts(parsed.posts),
-      chatSessions: sanitizeChats(parsed.chatSessions),
-      areaComments: sanitizeAreaComments(parsed.areaComments),
-      activeUsers: sanitizeActiveUsers(parsed.activeUsers),
-    };
-  } catch {
-    globalStore.__communityStore ??= emptyStore();
-  }
-}
-
-async function saveCommunity() {
-  const filePath = await communityStorePath();
-  if (!filePath) return;
-
-  try {
-    const fs = await import("node:fs/promises");
-    const path = await import("node:path");
-    await fs.mkdir(path.dirname(filePath), { recursive: true });
-    await fs.writeFile(filePath, JSON.stringify(store(), null, 2), "utf8");
-  } catch {
-    /* Keep the in-memory store in edge/serverless builds without a filesystem. */
-  }
-}
 
 function sanitizeText(value: unknown, fallback = "", maxLength = 4000) {
   return typeof value === "string" ? value.trim().slice(0, maxLength) || fallback : fallback;
@@ -182,12 +124,12 @@ function sanitizeChats(value: unknown) {
         ? chat.messages
             .map((message) => {
               if (!message || typeof message !== "object") return null;
-              const payload = message as { role?: unknown; text?: unknown };
+              const payload = message as Partial<CommunityChatMessage>;
               const role = payload.role === "assistant" ? "assistant" : "user";
               const text = sanitizeText(payload.text, "", 3000);
               return text ? { role, text } : null;
             })
-            .filter((message): message is { role: "user" | "assistant"; text: string } => Boolean(message))
+            .filter((message): message is CommunityChatMessage => Boolean(message))
         : [];
 
       return {
@@ -203,42 +145,123 @@ function sanitizeChats(value: unknown) {
     .filter((chat): chat is CommunityChatSession => Boolean(chat));
 }
 
-function sanitizeActiveUsers(value: unknown) {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((item): ActiveUser | null => {
-      if (!item || typeof item !== "object") return null;
-      const active = item as Partial<ActiveUser>;
-      const userId = sanitizeText(active.userId, "", 120);
-      if (!userId) return null;
-      return {
-        userId,
-        username: sanitizeText(active.username, "community-member", 80),
-        region: sanitizeRegion(active.region, ""),
-        lastSeenAt: sanitizeDate(active.lastSeenAt),
-      };
-    })
-    .filter((active): active is ActiveUser => Boolean(active));
+function postFromRow(row: CommunityPostRow): CommunityPost {
+  return {
+    id: row.id,
+    name: row.name,
+    area: row.area,
+    region: sanitizeRegion(row.region, row.area),
+    category: POST_CATEGORIES.includes(row.category as PostCategory) ? row.category as PostCategory : "Community Update",
+    message: row.message,
+    image: row.image ?? undefined,
+    coords: row.coords ? sanitizeCoords(row.coords) : undefined,
+    anonymous: row.anonymous,
+    createdAt: row.created_at,
+  };
 }
 
-function activeCounts() {
-  const cutoff = Date.now() - ACTIVE_WINDOW_MS;
+function chatFromRow(row: CommunityChatRow): CommunityChatSession {
+  return {
+    id: row.id,
+    name: row.name,
+    area: row.area,
+    region: sanitizeRegion(row.region, row.area),
+    messages: sanitizeChats([{ messages: row.messages, area: row.area, name: row.name, id: row.id, createdAt: row.created_at, updatedAt: row.updated_at }])[0]?.messages ?? [],
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function commentFromRow(row: CommunityCommentRow): CommunityComment {
+  return {
+    id: row.id,
+    author: row.author,
+    text: row.text,
+    region: sanitizeRegion(row.region, ""),
+    likes: row.likes,
+    createdAt: row.created_at,
+    replies: [],
+  };
+}
+
+function buildAreaComments(rows: CommunityCommentRow[]) {
+  const byId = new Map<string, CommunityComment>();
+  const parentById = new Map<string, string | null>();
+  const areaById = new Map<string, CapeTownRegion>();
+  const output: Record<string, CommunityComment[]> = {};
+
+  for (const row of rows) {
+    byId.set(row.id, commentFromRow(row));
+    parentById.set(row.id, row.parent_id);
+    areaById.set(row.id, sanitizeRegion(row.region, ""));
+  }
+
+  for (const row of rows) {
+    const comment = byId.get(row.id);
+    if (!comment) continue;
+    const parentId = parentById.get(row.id);
+    if (parentId && byId.has(parentId)) {
+      byId.get(parentId)!.replies.push(comment);
+      continue;
+    }
+    const region = areaById.get(row.id) ?? "CBD & City Bowl";
+    output[region] ??= [];
+    output[region].push(comment);
+  }
+
+  return output;
+}
+
+async function activeCounts() {
+  const supabase = createServerSupabaseClient();
+  const cutoff = new Date(Date.now() - ACTIVE_WINDOW_MS).toISOString();
+  await supabase.from("community_active_users").delete().lt("last_seen_at", cutoff);
+  const { data } = await supabase.from("community_active_users").select("region").gte("last_seen_at", cutoff);
   const counts: Partial<Record<CapeTownRegion, number>> = {};
-  store().activeUsers = store().activeUsers.filter((active) => Date.parse(active.lastSeenAt) >= cutoff);
-  for (const active of store().activeUsers) {
-    counts[active.region] = (counts[active.region] ?? 0) + 1;
+  for (const active of data ?? []) {
+    const region = sanitizeRegion(active.region, "");
+    counts[region] = (counts[region] ?? 0) + 1;
   }
   return counts;
 }
 
 export async function getCommunitySnapshot(): Promise<CommunitySnapshot> {
-  await ensureCommunityLoaded();
+  const supabase = createServerSupabaseClient();
+  const [postsResult, chatsResult, commentsResult, counts] = await Promise.all([
+    supabase.from("community_posts").select("*").order("created_at", { ascending: false }),
+    supabase.from("community_chat_sessions").select("*").order("updated_at", { ascending: false }),
+    supabase.from("community_comments").select("*").order("created_at", { ascending: true }),
+    activeCounts(),
+  ]);
+
   return {
-    posts: store().posts,
-    chatSessions: store().chatSessions,
-    areaComments: store().areaComments,
-    activeCounts: activeCounts(),
+    posts: (postsResult.data ?? []).map((row) => postFromRow(row as CommunityPostRow)),
+    chatSessions: (chatsResult.data ?? []).map((row) => chatFromRow(row as CommunityChatRow)),
+    areaComments: buildAreaComments((commentsResult.data ?? []) as CommunityCommentRow[]),
+    activeCounts: counts,
   };
+}
+
+function flattenComments(areaComments: Record<string, CommunityComment[]>) {
+  const rows: Database["public"]["Tables"]["community_comments"]["Insert"][] = [];
+  const visit = (comment: CommunityComment, region: CapeTownRegion, parentId: string | null) => {
+    rows.push({
+      id: comment.id,
+      parent_id: parentId,
+      author: comment.author,
+      text: comment.text,
+      region,
+      likes: comment.likes ?? 0,
+      created_at: comment.createdAt,
+    });
+    for (const reply of comment.replies) visit(reply, region, comment.id);
+  };
+
+  for (const [regionKey, comments] of Object.entries(areaComments)) {
+    const region = sanitizeRegion(regionKey, regionKey);
+    for (const comment of comments) visit(comment, region, null);
+  }
+  return rows;
 }
 
 export async function saveCommunitySnapshot(input: {
@@ -246,56 +269,79 @@ export async function saveCommunitySnapshot(input: {
   chatSessions?: unknown;
   areaComments?: unknown;
 }) {
-  await ensureCommunityLoaded();
-  store().posts = sanitizePosts(input.posts);
-  store().chatSessions = sanitizeChats(input.chatSessions);
-  store().areaComments = sanitizeAreaComments(input.areaComments);
-  await saveCommunity();
+  const posts = sanitizePosts(input.posts);
+  const chatSessions = sanitizeChats(input.chatSessions);
+  const areaComments = sanitizeAreaComments(input.areaComments);
+  const supabase = createServerSupabaseClient();
+
+  await Promise.all([
+    supabase.from("community_comments").delete().neq("id", "__none__"),
+    supabase.from("community_posts").delete().neq("id", "__none__"),
+    supabase.from("community_chat_sessions").delete().neq("id", "__none__"),
+  ]);
+
+  const postRows: Database["public"]["Tables"]["community_posts"]["Insert"][] = posts.map((post) => ({
+    id: post.id,
+    name: post.name,
+    area: post.area,
+    region: post.region ?? detectCapeTownRegion(post.area, post.coords),
+    category: post.category ?? "Community Update",
+    message: post.message,
+    image: post.image ?? null,
+    coords: post.coords ? post.coords as unknown as Json : null,
+    anonymous: Boolean(post.anonymous),
+    created_at: post.createdAt,
+  }));
+
+  const chatRows: Database["public"]["Tables"]["community_chat_sessions"]["Insert"][] = chatSessions.map((chat) => ({
+    id: chat.id,
+    name: chat.name,
+    area: chat.area,
+    region: chat.region ?? detectCapeTownRegion(chat.area),
+    messages: chat.messages as unknown as Json,
+    created_at: chat.createdAt,
+    updated_at: chat.updatedAt,
+  }));
+
+  const commentRows = flattenComments(areaComments);
+
+  if (postRows.length) await supabase.from("community_posts").insert(postRows);
+  if (chatRows.length) await supabase.from("community_chat_sessions").insert(chatRows);
+  if (commentRows.length) await supabase.from("community_comments").insert(commentRows);
+
   return getCommunitySnapshot();
 }
 
 export async function clearCommunityHistory() {
-  await ensureCommunityLoaded();
-  store().posts = [];
-  store().chatSessions = [];
-  store().areaComments = {};
-  await saveCommunity();
+  const supabase = createServerSupabaseClient();
+  await Promise.all([
+    supabase.from("community_comments").delete().neq("id", "__none__"),
+    supabase.from("community_posts").delete().neq("id", "__none__"),
+    supabase.from("community_chat_sessions").delete().neq("id", "__none__"),
+  ]);
   return getCommunitySnapshot();
 }
 
 export async function deleteCommunityPost(postId: string) {
-  await ensureCommunityLoaded();
-  store().posts = store().posts.filter((post) => post.id !== postId);
-  await saveCommunity();
+  const supabase = createServerSupabaseClient();
+  await supabase.from("community_posts").delete().eq("id", postId);
   return getCommunitySnapshot();
 }
 
-function removeCommentTree(comments: CommunityComment[], commentId: string): CommunityComment[] {
-  return comments
-    .filter((comment) => comment.id !== commentId)
-    .map((comment) => ({ ...comment, replies: removeCommentTree(comment.replies, commentId) }));
-}
-
 export async function deleteCommunityComment(commentId: string) {
-  await ensureCommunityLoaded();
-  for (const [region, comments] of Object.entries(store().areaComments)) {
-    store().areaComments[region] = removeCommentTree(comments, commentId);
-  }
-  await saveCommunity();
+  const supabase = createServerSupabaseClient();
+  await supabase.from("community_comments").delete().eq("id", commentId);
   return getCommunitySnapshot();
 }
 
 export async function recordCommunityActivity(user: { userId: string; username: string }, region: CapeTownRegion) {
-  await ensureCommunityLoaded();
-  const active = store().activeUsers.find((item) => item.userId === user.userId);
-  const lastSeenAt = new Date().toISOString();
-  if (active) {
-    active.username = user.username;
-    active.region = region;
-    active.lastSeenAt = lastSeenAt;
-  } else {
-    store().activeUsers.push({ userId: user.userId, username: user.username, region, lastSeenAt });
-  }
-  await saveCommunity();
+  const supabase = createServerSupabaseClient();
+  const active: Database["public"]["Tables"]["community_active_users"]["Insert"] = {
+    user_id: user.userId,
+    username: user.username,
+    region,
+    last_seen_at: new Date().toISOString(),
+  };
+  await supabase.from("community_active_users").upsert(active, { onConflict: "user_id" });
   return activeCounts();
 }

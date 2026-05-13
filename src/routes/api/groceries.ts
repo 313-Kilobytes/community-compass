@@ -119,6 +119,10 @@ const RETAILERS: Retailer[] = [
   },
 ];
 
+function firecrawlApiKey() {
+  return process.env.FIRECRAWL_API_KEY || import.meta.env.FIRECRAWL_API_KEY;
+}
+
 const PRICE_PATTERNS = [
   /(?:R|ZAR)\s?(\d{1,4}(?:[.,]\d{2}))/gi,
   /(?:R|ZAR)\s?(\d{1,4})(?!\d)/gi,
@@ -397,7 +401,7 @@ export const Route = createFileRoute("/api/groceries")({
   server: {
     handlers: {
       POST: async ({ request }: { request: Request }) => {
-        const apiKey = process.env.FIRECRAWL_API_KEY;
+        const apiKey = firecrawlApiKey();
         if (!apiKey) return Response.json({ error: "FIRECRAWL_API_KEY not configured" }, { status: 500 });
 
         let body: { query?: string };

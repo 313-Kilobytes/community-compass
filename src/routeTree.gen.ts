@@ -26,6 +26,7 @@ import { Route as ApiTicketsRouteImport } from './routes/api/tickets'
 import { Route as ApiSearchRouteImport } from './routes/api/search'
 import { Route as ApiReviewIntelligenceRouteImport } from './routes/api/review-intelligence'
 import { Route as ApiGroceriesRouteImport } from './routes/api/groceries'
+import { Route as ApiCommunityMapRouteImport } from './routes/api/community-map'
 import { Route as ApiCommunityRouteImport } from './routes/api/community'
 import { Route as ApiBroadcastsRouteImport } from './routes/api/broadcasts'
 import { Route as ApiAdminRouteImport } from './routes/api/admin'
@@ -124,6 +125,11 @@ const ApiGroceriesRoute = ApiGroceriesRouteImport.update({
   path: '/api/groceries',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCommunityMapRoute = ApiCommunityMapRouteImport.update({
+  id: '/api/community-map',
+  path: '/api/community-map',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiCommunityRoute = ApiCommunityRouteImport.update({
   id: '/api/community',
   path: '/api/community',
@@ -202,6 +208,7 @@ export interface FileRoutesByFullPath {
   '/api/admin': typeof ApiAdminRouteWithChildren
   '/api/broadcasts': typeof ApiBroadcastsRoute
   '/api/community': typeof ApiCommunityRouteWithChildren
+  '/api/community-map': typeof ApiCommunityMapRoute
   '/api/groceries': typeof ApiGroceriesRoute
   '/api/review-intelligence': typeof ApiReviewIntelligenceRoute
   '/api/search': typeof ApiSearchRoute
@@ -233,6 +240,7 @@ export interface FileRoutesByTo {
   '/api/admin': typeof ApiAdminRouteWithChildren
   '/api/broadcasts': typeof ApiBroadcastsRoute
   '/api/community': typeof ApiCommunityRouteWithChildren
+  '/api/community-map': typeof ApiCommunityMapRoute
   '/api/groceries': typeof ApiGroceriesRoute
   '/api/review-intelligence': typeof ApiReviewIntelligenceRoute
   '/api/search': typeof ApiSearchRoute
@@ -265,6 +273,7 @@ export interface FileRoutesById {
   '/api/admin': typeof ApiAdminRouteWithChildren
   '/api/broadcasts': typeof ApiBroadcastsRoute
   '/api/community': typeof ApiCommunityRouteWithChildren
+  '/api/community-map': typeof ApiCommunityMapRoute
   '/api/groceries': typeof ApiGroceriesRoute
   '/api/review-intelligence': typeof ApiReviewIntelligenceRoute
   '/api/search': typeof ApiSearchRoute
@@ -298,6 +307,7 @@ export interface FileRouteTypes {
     | '/api/admin'
     | '/api/broadcasts'
     | '/api/community'
+    | '/api/community-map'
     | '/api/groceries'
     | '/api/review-intelligence'
     | '/api/search'
@@ -329,6 +339,7 @@ export interface FileRouteTypes {
     | '/api/admin'
     | '/api/broadcasts'
     | '/api/community'
+    | '/api/community-map'
     | '/api/groceries'
     | '/api/review-intelligence'
     | '/api/search'
@@ -360,6 +371,7 @@ export interface FileRouteTypes {
     | '/api/admin'
     | '/api/broadcasts'
     | '/api/community'
+    | '/api/community-map'
     | '/api/groceries'
     | '/api/review-intelligence'
     | '/api/search'
@@ -392,6 +404,7 @@ export interface RootRouteChildren {
   ApiAdminRoute: typeof ApiAdminRouteWithChildren
   ApiBroadcastsRoute: typeof ApiBroadcastsRoute
   ApiCommunityRoute: typeof ApiCommunityRouteWithChildren
+  ApiCommunityMapRoute: typeof ApiCommunityMapRoute
   ApiGroceriesRoute: typeof ApiGroceriesRoute
   ApiReviewIntelligenceRoute: typeof ApiReviewIntelligenceRoute
   ApiSearchRoute: typeof ApiSearchRoute
@@ -522,6 +535,13 @@ declare module '@tanstack/react-router' {
       path: '/api/groceries'
       fullPath: '/api/groceries'
       preLoaderRoute: typeof ApiGroceriesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/community-map': {
+      id: '/api/community-map'
+      path: '/api/community-map'
+      fullPath: '/api/community-map'
+      preLoaderRoute: typeof ApiCommunityMapRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/community': {
@@ -656,6 +676,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAdminRoute: ApiAdminRouteWithChildren,
   ApiBroadcastsRoute: ApiBroadcastsRoute,
   ApiCommunityRoute: ApiCommunityRouteWithChildren,
+  ApiCommunityMapRoute: ApiCommunityMapRoute,
   ApiGroceriesRoute: ApiGroceriesRoute,
   ApiReviewIntelligenceRoute: ApiReviewIntelligenceRoute,
   ApiSearchRoute: ApiSearchRoute,

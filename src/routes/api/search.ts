@@ -17,12 +17,16 @@ const queryFor = (cat: Cat | "all", keyword: string, location: string) => {
 const cache = new Map<string, { at: number; data: unknown }>();
 const TTL = 1000 * 60 * 10;
 
+function firecrawlApiKey() {
+  return process.env.FIRECRAWL_API_KEY || import.meta.env.FIRECRAWL_API_KEY;
+}
+
 export const Route = createFileRoute("/api/search")({
   // @ts-ignore - server handlers supported by TanStack Start plugin
   server: {
     handlers: {
       POST: async ({ request }: { request: Request }) => {
-        const apiKey = process.env.FIRECRAWL_API_KEY;
+        const apiKey = firecrawlApiKey();
         if (!apiKey) {
           return Response.json({ error: "FIRECRAWL_API_KEY not configured" }, { status: 500 });
         }
