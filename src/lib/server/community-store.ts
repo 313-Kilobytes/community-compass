@@ -313,13 +313,23 @@ export async function saveCommunitySnapshot(input: {
 }
 
 export async function appendCommunityPost(post: CommunityPost) {
-  await ensureCommunityLoaded();
   const sanitized = sanitizePost(post);
   if (!sanitized) return getCommunitySnapshot();
-  if (!store().posts.some((item) => item.id === sanitized.id || (item.message === sanitized.message && item.createdAt === sanitized.createdAt))) {
-    store().posts.unshift(sanitized);
-  }
-  await saveCommunity();
+
+  const supabase = createServerSupabaseClient();
+  await supabase.from("community_posts").upsert({
+    id: sanitized.id,
+    name: sanitized.name,
+    area: sanitized.area,
+    region: sanitized.region ?? detectCapeTownRegion(sanitized.area, sanitized.coords),
+    category: sanitized.category ?? "Community Update",
+    message: sanitized.message,
+    image: sanitized.image ?? null,
+    coords: sanitized.coords ? sanitized.coords as unknown as Json : null,
+    anonymous: Boolean(sanitized.anonymous),
+    created_at: sanitized.createdAt,
+  });
+
   return getCommunitySnapshot();
 }
 
