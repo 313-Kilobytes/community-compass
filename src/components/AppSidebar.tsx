@@ -34,6 +34,7 @@ export function AppSidebar() {
   const { t } = useT();
   const { user } = useAuth();
   const visibleItems = user?.role === "super_admin" ? [...items, adminItem] : items;
+
   return (
     <aside className="relative hidden w-64 shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
       <div
@@ -52,11 +53,10 @@ export function AppSidebar() {
         </div>
         <div>
           <div className="font-display font-semibold text-base leading-tight">CommunityHub</div>
-          <div className="text-[11px] text-sidebar-foreground/60 tracking-wide uppercase">
-            Crisis Intel
-          </div>
+          <div className="text-[11px] text-sidebar-foreground/60 tracking-wide uppercase">Crisis Intel</div>
         </div>
       </div>
+
       <nav className="relative flex-1 p-3 space-y-1">
         {visibleItems.map((it) => {
           const active = pathname === it.url;
@@ -84,11 +84,10 @@ export function AppSidebar() {
           );
         })}
       </nav>
+
       <div className="relative p-4 m-3 rounded-xl bg-sidebar-accent/40 border border-sidebar-border">
         <div className="text-xs font-semibold text-sidebar-foreground/90">AI crisis hub</div>
-        <div className="text-[11px] text-sidebar-foreground/60 mt-0.5">
-          Alerts, resources, feed, and recommendations.
-        </div>
+        <div className="text-[11px] text-sidebar-foreground/60 mt-0.5">Alerts, resources, feed, and recommendations.</div>
       </div>
     </aside>
   );
@@ -97,12 +96,9 @@ export function AppSidebar() {
 export function MobileNav() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { t } = useT();
-<<<<<<< HEAD
-
-=======
   const { user } = useAuth();
   const visibleItems = user?.role === "super_admin" ? [...items, adminItem] : items;
->>>>>>> origin/main
+
   return (
     <nav className="md:hidden fixed bottom-3 inset-x-3 glass border border-border rounded-2xl shadow-elegant flex gap-1 overflow-x-auto py-2 px-2 z-50">
       {visibleItems.map((it) => {
@@ -123,3 +119,4 @@ export function MobileNav() {
     </nav>
   );
 }
+

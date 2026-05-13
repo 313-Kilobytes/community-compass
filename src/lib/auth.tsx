@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { supabase } from "./supabase";
 import type { User } from "@supabase/supabase-js";
 import type { CapeTownRegion } from "./community";
+import type { Json } from "./types/supabase";
 
 export type UserLocation = {
   label: string;
@@ -13,12 +14,15 @@ export type UserProfile = {
   userId: string;
   username: string;
   email: string;
+  role: UserRole;
   fullName?: string;
   permanentLocation: UserLocation;
   currentLocation?: UserLocation;
   createdAt: string;
   profilePicture?: string;
 };
+
+export type UserRole = "super_admin" | "regional_admin" | "community_moderator" | "verified_reporter" | "user";
 
 type AuthInput = {
   username: string;
@@ -51,33 +55,37 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+async function profileHeaders(): Promise<Record<string, string>> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 // Convert Supabase user to our UserProfile format
 async function convertSupabaseUser(user: User): Promise<UserProfile | null> {
   try {
-    const { data: profile, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('user_id', user.id)
-      .single();
+    const response = await fetch("/api/auth/profile", { headers: await profileHeaders() });
+    const result = (await response.json().catch(() => ({}))) as { user?: UserProfile; error?: string };
+    if (!response.ok || !result.user) throw new Error(result.error || "Profile not found.");
+    return result.user;
+  } catch (apiError) {
+    console.error("Profile API lookup failed:", apiError);
 
-    if (error || !profile) {
-      console.error('Profile not found:', error);
-      return null;
-    }
+    const { data: profile, error } = await supabase.from("profiles").select("*").eq("user_id", user.id).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!profile) throw new Error("No profile row exists for this signed-in user.");
 
     return {
       userId: user.id,
       username: profile.username,
       email: user.email!,
+      role: profile.role ?? "user",
       fullName: profile.full_name || undefined,
       permanentLocation: profile.permanent_location as UserLocation,
       currentLocation: profile.current_location ? profile.current_location as UserLocation : undefined,
       createdAt: profile.created_at,
       profilePicture: profile.profile_picture || undefined,
     };
-  } catch (error) {
-    console.error('Error converting Supabase user:', error);
-    return null;
   }
 }
 
@@ -85,6 +93,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const loadSupabaseUser = async (supabaseUser: User) => {
+    try {
+      const profile = await convertSupabaseUser(supabaseUser);
+      setUser(profile);
+      setError(null);
+      return profile;
+    } catch (nextError) {
+      const message = nextError instanceof Error ? nextError.message : "Unable to load your profile.";
+      setUser(null);
+      setError(message);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const refresh = async () => {
     setLoading(true);
@@ -96,8 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const profile = await convertSupabaseUser(supabaseUser);
-      setUser(profile);
+      await loadSupabaseUser(supabaseUser);
     } catch (nextError) {
       setUser(null);
       setError(nextError instanceof Error ? nextError.message : "Unable to restore your session.");
@@ -107,20 +130,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
-        const profile = await convertSupabaseUser(session.user);
-        setUser(profile);
-        setError(null);
+        setTimeout(() => {
+          void loadSupabaseUser(session.user);
+        }, 0);
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
         setError(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
-    // Initial check
     refresh();
 
     return () => subscription.unsubscribe();
@@ -137,6 +158,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           data: {
             username: input.username,
             full_name: input.fullName,
+            permanent_location: input.permanentLocation,
           }
         }
       });
@@ -151,7 +173,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error: profileError } = await supabase
         .from('profiles')
         .update({
-          permanent_location: input.permanentLocation,
+          permanent_location: input.permanentLocation as unknown as Json,
         })
         .eq('user_id', data.user.id);
 
@@ -178,8 +200,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (authError) throw authError;
       if (!data.user) throw new Error('Login failed');
 
-      // User will be set by the auth state change listener
-      return true;
+      const profile = await loadSupabaseUser(data.user);
+      return Boolean(profile);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Sign in failed.");
       return false;
@@ -202,15 +224,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       if (!user) throw new Error('Not authenticated');
 
-      const updates: any = {};
+      const updates: {
+        username?: string;
+        full_name?: string;
+        current_location?: Json | null;
+        permanent_location?: Json;
+        profile_picture?: string;
+        updated_at: string;
+      } = { updated_at: new Date().toISOString() };
 
       if (patch.username) updates.username = patch.username;
       if (patch.fullName !== undefined) updates.full_name = patch.fullName;
-      if (patch.currentLocation !== undefined) updates.current_location = patch.currentLocation;
-      if (patch.permanentLocation) updates.permanent_location = patch.permanentLocation;
+      if (patch.currentLocation !== undefined) updates.current_location = patch.currentLocation as unknown as Json | null;
+      if (patch.permanentLocation) updates.permanent_location = patch.permanentLocation as unknown as Json;
       if (patch.profilePicture !== undefined) updates.profile_picture = patch.profilePicture;
-
-      updates.updated_at = new Date().toISOString();
 
       const { error: updateError } = await supabase
         .from('profiles')
@@ -252,4 +279,3 @@ export function useAuth() {
   return value;
 }
 
-export type { UserLocation, UserProfile };

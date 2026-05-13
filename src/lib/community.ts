@@ -1,4 +1,5 @@
 import { analyzeIncident } from "@/lib/crisis-intelligence";
+import { supabase } from "@/lib/supabase";
 
 export type CommunityComment = {
   id: string;
@@ -267,10 +268,11 @@ export async function saveCommunitySnapshot(snapshot: Omit<CommunitySnapshot, "a
 
 export async function pingCommunityActivity(region: CapeTownRegion) {
   try {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
     const response = await fetch("/api/community/activity", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: JSON.stringify({ region }),
     });
     if (!response.ok) return null;

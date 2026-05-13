@@ -1,14 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
-  createSession,
-  createUser,
   json,
   validateEmail,
   validateLocation,
-  validateName,
   validatePassword,
   validateUsername,
-  withSession,
 } from "@/lib/server/auth";
 
 export const Route = createFileRoute("/api/auth/signup")({
@@ -41,18 +37,9 @@ export const Route = createFileRoute("/api/auth/signup")({
         const permanentLocation = validateLocation(body.permanentLocation);
         if (!permanentLocation) return json({ error: "Permanent location is required." }, { status: 400 });
 
-        const result = await createUser({
-          username: String(body.username).trim(),
-          email: String(body.email).trim(),
-          password: String(body.password),
-          fullName: validateName(body.fullName),
-          permanentLocation,
-        });
-
-        if (result.error || !result.user) return json({ error: result.error }, { status: 409 });
-
-        const token = await createSession(result.user.userId);
-        return withSession(result.user, token, 201);
+        return json({
+          error: "Use Supabase auth from the frontend; this API no longer creates session cookies.",
+        }, { status: 410 });
       },
     },
   },

@@ -1,4 +1,7 @@
-import { detectCapeTownRegion, type CapeTownRegion } from "@/lib/community";
+import { CAPE_TOWN_REGIONS, detectCapeTownRegion, type CapeTownRegion } from "@/lib/community";
+import { createServerSupabaseClient } from "@/lib/supabase";
+import type { User as SupabaseAuthUser } from "@supabase/supabase-js";
+import type { Database, Json } from "@/lib/types/supabase";
 
 export type UserLocation = {
   label: string;
@@ -6,11 +9,13 @@ export type UserLocation = {
   coords?: { lat: number; lng: number };
 };
 
+export type UserRole = "super_admin" | "regional_admin" | "community_moderator" | "verified_reporter" | "user";
+
 export type UserProfile = {
   userId: string;
   username: string;
   email: string;
-  role?: UserRole;
+  role: UserRole;
   fullName?: string;
   permanentLocation: UserLocation;
   currentLocation?: UserLocation;
@@ -18,232 +23,114 @@ export type UserProfile = {
   profilePicture?: string;
 };
 
-export type UserRole = "super_admin" | "regional_admin" | "community_moderator" | "verified_reporter" | "user";
-
-type StoredUser = UserProfile & {
-  password: string;
+type ProfileRow = {
+  user_id: string;
+  username: string;
+  email: string;
+  role: UserRole | null;
+  full_name: string | null;
+  permanent_location: unknown;
+  current_location: unknown | null;
+  created_at: string;
+  profile_picture: string | null;
 };
 
-type SessionPayload = {
-  userId: string;
-  exp: number;
-};
-
-const SESSION_COOKIE = "community_session";
-const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
-
-const globalStore = globalThis as typeof globalThis & {
-  __communityUsers?: StoredUser[];
-  __communityUsersLoaded?: boolean;
-};
-
-function users() {
-  globalStore.__communityUsers ??= [];
-  return globalStore.__communityUsers;
-}
-
-async function userStorePath() {
-  if (typeof process === "undefined" || !process.versions?.node) return null;
-  const path = await import("node:path");
-  return path.join(process.cwd(), ".data", "community-users.json");
-}
-
-async function ensureUsersLoaded() {
-  if (globalStore.__communityUsersLoaded) {
-    await bootstrapSuperAdmin();
-    return;
-  }
-  globalStore.__communityUsersLoaded = true;
-
-  const filePath = await userStorePath();
-  if (!filePath) return;
-
-  try {
-    const fs = await import("node:fs/promises");
-    const raw = await fs.readFile(filePath, "utf8");
-    const parsed = JSON.parse(raw) as StoredUser[];
-    if (Array.isArray(parsed)) globalStore.__communityUsers = parsed;
-  } catch {
-    globalStore.__communityUsers ??= [];
-  }
-
-  await bootstrapSuperAdmin();
-}
-
-async function saveUsers() {
-  const filePath = await userStorePath();
-  if (!filePath) return;
-
-  try {
-    const fs = await import("node:fs/promises");
-    const path = await import("node:path");
-    await fs.mkdir(path.dirname(filePath), { recursive: true });
-    await fs.writeFile(filePath, JSON.stringify(users(), null, 2), "utf8");
-  } catch {
-    /* In edge/serverless builds without a filesystem, keep the in-memory store. */
-  }
-}
+const validRoles: UserRole[] = ["super_admin", "regional_admin", "community_moderator", "verified_reporter", "user"];
+const defaultLocation: UserLocation = { label: "Cape Town", region: "Cape Flats" };
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
-function normalizeUsername(username: string) {
-  return username.trim().toLowerCase();
+function configuredSuperAdminEmails() {
+  return new Set((process.env.SUPER_ADMIN_EMAILS ?? "").split(",").map((email) => normalizeEmail(email)).filter(Boolean));
 }
 
-async function configuredSuperAdminEmails() {
-  let raw = process.env.SUPER_ADMIN_EMAILS ?? "";
+function roleForEmail(email?: string | null): UserRole {
+  return email && configuredSuperAdminEmails().has(normalizeEmail(email)) ? "super_admin" : "user";
+}
 
-  if (!raw && typeof process !== "undefined" && process.versions?.node) {
-    try {
-      const fs = await import("node:fs/promises");
-      const path = await import("node:path");
-      const envText = await fs.readFile(path.join(process.cwd(), ".env.local"), "utf8");
-      const line = envText
-        .split(/\r?\n/)
-        .map((item) => item.trim())
-        .find((item) => item.startsWith("SUPER_ADMIN_EMAILS="));
-      raw = line?.slice("SUPER_ADMIN_EMAILS=".length).trim() ?? "";
-    } catch {
-      raw = "";
+function usernameForAuthUser(user: SupabaseAuthUser) {
+  const metadataUsername = user.user_metadata?.username;
+  if (typeof metadataUsername === "string" && metadataUsername.trim()) return metadataUsername.trim().slice(0, 24);
+  return (user.email?.split("@")[0] || "user").replace(/[^a-zA-Z0-9_]/g, "_").slice(0, 24) || "user";
+}
+
+function nameForAuthUser(user: SupabaseAuthUser) {
+  const metadataName = user.user_metadata?.full_name;
+  return typeof metadataName === "string" ? validateName(metadataName) : undefined;
+}
+
+function bearerToken(request: Request) {
+  const authHeader = request.headers.get("authorization") ?? "";
+  return authHeader.match(/^Bearer\s+(.+)$/i)?.[1] ?? null;
+}
+
+function normalizeLocation(value: unknown): UserLocation {
+  if (!value || typeof value !== "object") return defaultLocation;
+  const location = value as Partial<UserLocation>;
+  const label = typeof location.label === "string" && location.label.trim() ? location.label.trim() : defaultLocation.label;
+  const coords =
+    location.coords && Number.isFinite(Number(location.coords.lat)) && Number.isFinite(Number(location.coords.lng))
+      ? { lat: Number(Number(location.coords.lat).toFixed(5)), lng: Number(Number(location.coords.lng).toFixed(5)) }
+      : undefined;
+  const region = validCapeTownRegion(location.region) ? location.region : detectCapeTownRegion(label, coords);
+  return { label, coords, region };
+}
+
+function validCapeTownRegion(value: unknown): value is CapeTownRegion {
+  return CAPE_TOWN_REGIONS.includes(value as CapeTownRegion);
+}
+
+function publicUser(profile: ProfileRow): UserProfile {
+  return {
+    userId: profile.user_id,
+    username: profile.username,
+    email: profile.email,
+    role: profile.role ?? "user",
+    fullName: profile.full_name ?? undefined,
+    permanentLocation: normalizeLocation(profile.permanent_location),
+    currentLocation: profile.current_location ? normalizeLocation(profile.current_location) : undefined,
+    createdAt: profile.created_at,
+    profilePicture: profile.profile_picture ?? undefined,
+  };
+}
+
+async function profileForUserId(userId: string) {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase.from("profiles").select("*").eq("user_id", userId).single();
+  if (error || !data) return null;
+  return publicUser(data as ProfileRow);
+}
+
+async function profileForAuthUser(user: SupabaseAuthUser) {
+  const supabase = createServerSupabaseClient();
+  const expectedRole = roleForEmail(user.email);
+  const { data: existing, error: existingError } = await supabase.from("profiles").select("*").eq("user_id", user.id).maybeSingle();
+
+  if (existing && !existingError) {
+    if (expectedRole === "super_admin" && existing.role !== "super_admin") {
+      const { data: promoted } = await supabase.from("profiles").update({ role: "super_admin" }).eq("user_id", user.id).select("*").single();
+      if (promoted) return publicUser(promoted as ProfileRow);
     }
+    return publicUser(existing as ProfileRow);
   }
 
-  return new Set(raw.split(",").map((email) => normalizeEmail(email)).filter(Boolean));
-}
+  const { data, error } = await supabase
+    .from("profiles")
+    .insert({
+      user_id: user.id,
+      username: usernameForAuthUser(user),
+      email: user.email ?? "",
+      full_name: nameForAuthUser(user),
+      permanent_location: defaultLocation as unknown as Json,
+      role: expectedRole,
+    })
+    .select("*")
+    .single();
 
-async function isConfiguredSuperAdmin(email: string) {
-  return (await configuredSuperAdminEmails()).has(normalizeEmail(email));
-}
-
-async function bootstrapSuperAdmin() {
-  const currentUsers = users();
-  let changed = false;
-
-  for (const user of currentUsers) {
-    if ((await isConfiguredSuperAdmin(user.email)) && user.role !== "super_admin") {
-      user.role = "super_admin";
-      changed = true;
-    }
-  }
-
-  if (currentUsers.length > 0 && !currentUsers.some((user) => user.role === "super_admin")) {
-    currentUsers[0].role = "super_admin";
-    changed = true;
-  }
-
-  if (changed) await saveUsers();
-}
-
-function encodeBase64Url(input: ArrayBuffer | Uint8Array | string) {
-  const bytes =
-    typeof input === "string"
-      ? new TextEncoder().encode(input)
-      : input instanceof Uint8Array
-        ? input
-        : new Uint8Array(input);
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
-}
-
-function decodeBase64Url(value: string) {
-  const padded = value.replaceAll("-", "+").replaceAll("_", "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
-  const binary = atob(padded);
-  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
-}
-
-async function importHmacKey(secret: string) {
-  return crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign", "verify"],
-  );
-}
-
-function sessionSecret() {
-  return process.env.AUTH_SECRET || "community-compass-dev-secret-change-me";
-}
-
-async function signSession(payload: SessionPayload) {
-  const body = encodeBase64Url(JSON.stringify(payload));
-  const key = await importHmacKey(sessionSecret());
-  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body));
-  return `${body}.${encodeBase64Url(signature)}`;
-}
-
-async function verifySession(token: string): Promise<SessionPayload | null> {
-  const [body, signature] = token.split(".");
-  if (!body || !signature) return null;
-
-  const key = await importHmacKey(sessionSecret());
-  const valid = await crypto.subtle.verify("HMAC", key, decodeBase64Url(signature), new TextEncoder().encode(body));
-  if (!valid) return null;
-
-  try {
-    const payload = JSON.parse(new TextDecoder().decode(decodeBase64Url(body))) as SessionPayload;
-    if (!payload.userId || payload.exp <= Math.floor(Date.now() / 1000)) return null;
-    return payload;
-  } catch {
-    return null;
-  }
-}
-
-async function hashPassword(password: string) {
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const keyMaterial = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
-  const bits = await crypto.subtle.deriveBits(
-    { name: "PBKDF2", salt, iterations: 210_000, hash: "SHA-256" },
-    keyMaterial,
-    256,
-  );
-  return `pbkdf2_sha256$210000$${encodeBase64Url(salt)}$${encodeBase64Url(bits)}`;
-}
-
-async function verifyPassword(password: string, stored: string) {
-  const [algorithm, iterations, salt, hash] = stored.split("$");
-  if (algorithm !== "pbkdf2_sha256" || !iterations || !salt || !hash) return false;
-
-  const keyMaterial = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
-  const bits = await crypto.subtle.deriveBits(
-    { name: "PBKDF2", salt: decodeBase64Url(salt), iterations: Number(iterations), hash: "SHA-256" },
-    keyMaterial,
-    256,
-  );
-  const nextHash = encodeBase64Url(bits);
-  if (nextHash.length !== hash.length) return false;
-  let diff = 0;
-  for (let index = 0; index < hash.length; index += 1) diff |= nextHash.charCodeAt(index) ^ hash.charCodeAt(index);
-  return diff === 0;
-}
-
-function publicUser(user: StoredUser): UserProfile {
-  const { password, ...profile } = user;
-  return profile;
-}
-
-function parseCookies(request: Request) {
-  return Object.fromEntries(
-    (request.headers.get("cookie") ?? "")
-      .split(";")
-      .map((cookie) => cookie.trim())
-      .filter(Boolean)
-      .map((cookie) => {
-        const [name, ...rest] = cookie.split("=");
-        return [name, decodeURIComponent(rest.join("="))];
-      }),
-  );
-}
-
-function sessionCookie(token: string, maxAge = SESSION_TTL_SECONDS) {
-  return `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; Max-Age=${maxAge}; HttpOnly; SameSite=Lax`;
-}
-
-export function clearSessionCookie() {
-  return `${SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`;
+  if (error || !data) return null;
+  return publicUser(data as ProfileRow);
 }
 
 export function json(data: unknown, init?: ResponseInit) {
@@ -252,7 +139,7 @@ export function json(data: unknown, init?: ResponseInit) {
 
 export function validateLocation(value: unknown): UserLocation | null {
   if (!value || typeof value !== "object") return null;
-  const location = value as { label?: unknown; coords?: unknown; region?: unknown };
+  const location = value as { label?: unknown; coords?: unknown };
   const label = typeof location.label === "string" ? location.label.trim().slice(0, 160) : "";
   if (label.length < 2) return null;
 
@@ -306,64 +193,15 @@ export function validatePassword(password: unknown) {
   return null;
 }
 
-export async function createUser(input: {
-  username: string;
-  email: string;
-  password: string;
-  fullName?: string;
-  permanentLocation: UserLocation;
-}) {
-  await ensureUsersLoaded();
-  const usernameKey = normalizeUsername(input.username);
-  const emailKey = normalizeEmail(input.email);
-  if (users().some((user) => normalizeUsername(user.username) === usernameKey)) {
-    return { error: "Username is already taken." };
-  }
-  if (users().some((user) => normalizeEmail(user.email) === emailKey)) {
-    return { error: "Email is already registered." };
-  }
-
-  const user: StoredUser = {
-    userId: crypto.randomUUID(),
-    username: input.username.trim(),
-    email: emailKey,
-    password: await hashPassword(input.password),
-    role: users().length === 0 || (await isConfiguredSuperAdmin(emailKey)) ? "super_admin" : "user",
-    fullName: validateName(input.fullName),
-    permanentLocation: input.permanentLocation,
-    createdAt: new Date().toISOString(),
-  };
-  users().push(user);
-  await saveUsers();
-  return { user: publicUser(user) };
-}
-
-export async function authenticate(identifier: string, password: string) {
-  await ensureUsersLoaded();
-  const key = identifier.trim().toLowerCase();
-  const user = users().find((item) => normalizeEmail(item.email) === key || normalizeUsername(item.username) === key);
-  if (!user) return { error: "No account was found for that email or username." };
-  if (!(await verifyPassword(password, user.password))) return { error: "The password is incorrect." };
-  return { user: publicUser(user) };
-}
-
-export async function createSession(userId: string) {
-  const exp = Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS;
-  return signSession({ userId, exp });
-}
-
 export async function getUserFromRequest(request: Request) {
-  await ensureUsersLoaded();
-  const token = parseCookies(request)[SESSION_COOKIE];
+  const token = bearerToken(request);
   if (!token) return null;
-  const payload = await verifySession(token);
-  if (!payload) return null;
-  const user = users().find((item) => item.userId === payload.userId);
-  if (user && user.role !== "super_admin" && (await isConfiguredSuperAdmin(user.email))) {
-    user.role = "super_admin";
-    await saveUsers();
-  }
-  return user ? publicUser(user) : null;
+
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error || !data.user) return null;
+
+  return profileForAuthUser(data.user);
 }
 
 export async function requireSuperAdmin(request: Request) {
@@ -373,64 +211,64 @@ export async function requireSuperAdmin(request: Request) {
   return { user };
 }
 
-export function withSession(user: UserProfile, token: string, status = 200) {
-  return json({ user }, { status, headers: { "Set-Cookie": sessionCookie(token) } });
-}
+export async function updateUserProfile(
+  userId: string,
+  patch: {
+    username?: string;
+    fullName?: string;
+    currentLocation?: UserLocation | null;
+    permanentLocation?: UserLocation;
+    profilePicture?: string;
+  },
+) {
+  const updates: Database["public"]["Tables"]["profiles"]["Update"] = {};
+  if (patch.username) updates.username = patch.username.trim();
+  if ("fullName" in patch) updates.full_name = validateName(patch.fullName);
+  if ("profilePicture" in patch) updates.profile_picture = patch.profilePicture || null;
+  if ("currentLocation" in patch) updates.current_location = patch.currentLocation as unknown as Json | null;
+  if (patch.permanentLocation) updates.permanent_location = patch.permanentLocation as unknown as Json;
 
-export async function updateUserProfile(userId: string, patch: {
-  username?: string;
-  fullName?: string;
-  currentLocation?: UserLocation | null;
-  permanentLocation?: UserLocation;
-  profilePicture?: string;
-}) {
-  await ensureUsersLoaded();
-  const user = users().find((item) => item.userId === userId);
-  if (!user) return { error: "User not found." };
-
-  if (patch.username && normalizeUsername(patch.username) !== normalizeUsername(user.username)) {
-    if (users().some((item) => item.userId !== userId && normalizeUsername(item.username) === normalizeUsername(patch.username!))) {
-      return { error: "Username is already taken." };
-    }
-    user.username = patch.username.trim();
-  }
-
-  if ("fullName" in patch) user.fullName = validateName(patch.fullName);
-  if ("profilePicture" in patch) user.profilePicture = patch.profilePicture || undefined;
-  if ("currentLocation" in patch) user.currentLocation = patch.currentLocation ?? undefined;
-  if (patch.permanentLocation) user.permanentLocation = patch.permanentLocation;
-
-  await saveUsers();
-  return { user: publicUser(user) };
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase.from("profiles").update(updates).eq("user_id", userId).select("*").single();
+  if (error || !data) return { error: error?.message ?? "User not found." };
+  return { user: publicUser(data as ProfileRow) };
 }
 
 export async function listUsers() {
-  await ensureUsersLoaded();
-  return users().map(publicUser);
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase.from("profiles").select("*").order("created_at", { ascending: false });
+  if (error || !data) return [];
+  return (data as ProfileRow[]).map(publicUser);
 }
 
 export async function updateUserRole(userId: string, role: UserRole) {
-  await ensureUsersLoaded();
-  const user = users().find((item) => item.userId === userId);
-  if (!user) return { error: "User not found." };
-  const validRoles: UserRole[] = ["super_admin", "regional_admin", "community_moderator", "verified_reporter", "user"];
   if (!validRoles.includes(role)) return { error: "Role is invalid." };
-  if (user.role === "super_admin" && role !== "super_admin" && users().filter((item) => item.role === "super_admin").length === 1) {
-    return { error: "At least one super admin is required." };
+
+  const supabase = createServerSupabaseClient();
+  const current = await profileForUserId(userId);
+  if (!current) return { error: "User not found." };
+
+  if (current.role === "super_admin" && role !== "super_admin") {
+    const { count } = await supabase.from("profiles").select("user_id", { count: "exact", head: true }).eq("role", "super_admin");
+    if ((count ?? 0) <= 1) return { error: "At least one super admin is required." };
   }
-  user.role = role;
-  await saveUsers();
-  return { user: publicUser(user) };
+
+  const { data, error } = await supabase.from("profiles").update({ role }).eq("user_id", userId).select("*").single();
+  if (error || !data) return { error: error?.message ?? "User not found." };
+  return { user: publicUser(data as ProfileRow) };
 }
 
 export async function deleteUser(userId: string) {
-  await ensureUsersLoaded();
-  const index = users().findIndex((item) => item.userId === userId);
-  if (index < 0) return { error: "User not found." };
-  if (users()[index].role === "super_admin" && users().filter((item) => item.role === "super_admin").length === 1) {
-    return { error: "At least one super admin is required." };
+  const supabase = createServerSupabaseClient();
+  const current = await profileForUserId(userId);
+  if (!current) return { error: "User not found." };
+
+  if (current.role === "super_admin") {
+    const { count } = await supabase.from("profiles").select("user_id", { count: "exact", head: true }).eq("role", "super_admin");
+    if ((count ?? 0) <= 1) return { error: "At least one super admin is required." };
   }
-  users().splice(index, 1);
-  await saveUsers();
+
+  const { error } = await supabase.auth.admin.deleteUser(userId);
+  if (error) return { error: error.message };
   return { ok: true };
 }
