@@ -33,6 +33,13 @@ import { analyzeIncident, type IncidentAnalysis } from "@/lib/crisis-intelligenc
 import { CAPE_TOWN_REGIONS, type CapeTownRegion, type CommunityComment, type CommunityPost, type CommunitySnapshot } from "@/lib/community";
 import type { AdminOperations, AdminTicket, AdminUserStatus, AdminIncidentStatus, TicketPriority, TicketStatus } from "@/lib/server/admin-store";
 import { useAuth, type UserProfile, type UserRole } from "@/lib/auth";
+import { supabase } from "@/lib/supabase";
+
+async function authHeaders(): Promise<Record<string, string>> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 type AdminData = {
   users: UserProfile[];
@@ -120,7 +127,7 @@ function AdminPage() {
     setStatus("loading");
     setError(null);
     try {
-      const response = await fetch("/api/admin", { credentials: "include" });
+      const response = await fetch("/api/admin", { headers: await authHeaders() });
       const next = (await response.json().catch(() => ({}))) as AdminData & AdminError;
       if (!response.ok) throw new Error(next.error || "Unable to load admin data.");
       setData(next);
@@ -149,8 +156,7 @@ function AdminPage() {
     try {
       const response = await fetch("/api/admin/operations", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
         body: JSON.stringify(body),
       });
       const result = (await response.json().catch(() => ({}))) as { operations?: AdminOperations; error?: string };
@@ -175,8 +181,7 @@ function AdminPage() {
     try {
       const response = await fetch(`/api/admin/users/${userId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
         body: JSON.stringify({ role }),
       });
       const result = (await response.json().catch(() => ({}))) as { user?: UserProfile; operations?: AdminOperations; error?: string };
@@ -203,8 +208,7 @@ function AdminPage() {
     try {
       const response = await fetch(`/api/admin/users/${userId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
         body: JSON.stringify({ status: nextStatus }),
       });
       const result = (await response.json().catch(() => ({}))) as { operations?: AdminOperations; error?: string };
@@ -221,7 +225,7 @@ function AdminPage() {
     setStatus("saving");
     setError(null);
     try {
-      const response = await fetch(`/api/admin/users/${userId}`, { method: "DELETE", credentials: "include" });
+      const response = await fetch(`/api/admin/users/${userId}`, { method: "DELETE", headers: await authHeaders() });
       const result = (await response.json().catch(() => ({}))) as AdminError;
       if (!response.ok) throw new Error(result.error || "Unable to delete user.");
       setData((current) => (current ? { ...current, users: current.users.filter((item) => item.userId !== userId) } : current));
@@ -238,7 +242,7 @@ function AdminPage() {
     try {
       const params = new URLSearchParams({ type });
       if (id) params.set("id", id);
-      const response = await fetch(`/api/admin/community?${params.toString()}`, { method: "DELETE", credentials: "include" });
+      const response = await fetch(`/api/admin/community?${params.toString()}`, { method: "DELETE", headers: await authHeaders() });
       const next = (await response.json().catch(() => ({}))) as { community?: CommunitySnapshot; operations?: AdminOperations; error?: string };
       if (!response.ok || !next.community) throw new Error(next.error || "Unable to update community history.");
       setData((current) => (current ? { ...current, community: next.community!, operations: next.operations ?? current.operations } : current));

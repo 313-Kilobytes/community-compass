@@ -46,7 +46,8 @@ declare global {
 
 const VOICEFLOW_SCRIPT_ID = "voiceflow-webchat";
 const VOICEFLOW_SCRIPT_SRC = "https://cdn.voiceflow.com/widget-next/bundle.mjs";
-const VOICEFLOW_PROJECT_ID = import.meta.env.VITE_VOICEFLOW_PROJECT_ID ?? "69fd9a85370afbde9ec3224c";
+const VOICEFLOW_PROJECT_ID =
+  import.meta.env.VITE_VOICEFLOW_PROJECT_ID ?? "69fd9a85370afbde9ec3224c";
 const VOICEFLOW_VERSION_ID = import.meta.env.VITE_VOICEFLOW_VERSION_ID;
 
 function loadVoiceflowScript() {
@@ -120,7 +121,7 @@ function ChatPage() {
   }, []);
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-5rem)] max-w-4xl flex-col overflow-hidden px-4 py-6 md:h-screen md:px-8">
+    <div className="mx-auto flex h-[calc(100vh-8.5rem)] max-w-4xl flex-col overflow-hidden px-4 pb-6 md:h-[calc(100vh-5.5rem)] md:px-8">
       <header className="mb-6 shrink-0 pr-24">
         <div className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
           <Bot className="h-5 w-5" />
@@ -151,8 +152,9 @@ function ChatPage() {
             <div className="max-w-md">
               <h2 className="text-lg font-semibold">Add your Voiceflow project ID</h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                Set <code className="rounded bg-muted px-1.5 py-0.5">VITE_VOICEFLOW_PROJECT_ID</code> in your local
-                environment, then restart the dev server.
+                Set{" "}
+                <code className="rounded bg-muted px-1.5 py-0.5">VITE_VOICEFLOW_PROJECT_ID</code> in
+                your local environment, then restart the dev server.
               </p>
             </div>
           </div>

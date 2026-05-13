@@ -113,27 +113,27 @@ export function SignUpForm() {
 export function SignInForm() {
   const { login, error, clearError } = useAuth();
   const navigate = useNavigate();
-  const [identifier, setIdentifier] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
-  const identifierProblem = useMemo(() => {
-    const value = identifier.trim();
-    if (!value || !value.includes("@")) return null;
+  const emailProblem = useMemo(() => {
+    const value = email.trim();
+    if (!value) return null;
     return EMAIL_PATTERN.test(value) ? null : "That email does not look right. Use something like name@example.com.";
-  }, [identifier]);
+  }, [email]);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     clearError();
     setLocalError(null);
-    const value = identifier.trim();
+    const value = email.trim();
     if (!value) {
-      setLocalError("Email or username is required.");
+      setLocalError("Email is required.");
       return;
     }
-    if (value.includes("@") && !EMAIL_PATTERN.test(value)) {
+    if (!EMAIL_PATTERN.test(value)) {
       setLocalError("Please enter a proper email address, for example name@example.com.");
       return;
     }
@@ -142,7 +142,7 @@ export function SignInForm() {
       return;
     }
     setBusy(true);
-    const ok = await login(identifier, password);
+    const ok = await login(email, password);
     setBusy(false);
     if (ok) await navigate({ to: "/profile" });
   };
@@ -152,9 +152,9 @@ export function SignInForm() {
       <h2 className="flex items-center gap-2 font-display text-xl font-semibold">
         <UserRound className="h-5 w-5 text-primary" /> Sign in
       </h2>
-      <p className="mt-1 text-sm text-muted-foreground">Use either your email address or your username.</p>
+      <p className="mt-1 text-sm text-muted-foreground">Enter your email address and password.</p>
       <div className="mt-4 grid gap-3">
-        <TextInput value={identifier} onChange={setIdentifier} label="Email or username" autoComplete="username" required hint={identifierProblem} />
+        <TextInput value={email} onChange={setEmail} label="Email" type="email" autoComplete="email" required hint={emailProblem} />
         <TextInput value={password} onChange={setPassword} label="Password" type="password" autoComplete="current-password" required />
       </div>
       {(localError || error) && <p className="mt-3 text-xs font-semibold text-destructive">{localError || error}</p>}

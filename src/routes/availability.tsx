@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { resources } from "@/data/resources";
 import { ResourceCard } from "@/components/ResourceCard";
-import { Search } from "lucide-react";
+import { Search, Siren, Stethoscope, UsersRound } from "lucide-react";
 
 export const Route = createFileRoute("/availability")({
   head: () => ({
@@ -46,23 +46,43 @@ function scoreResources(query: string) {
 
 function AvailabilityPage() {
   const [q, setQ] = useState("");
-  const [submitted, setSubmitted] = useState("");
+  const [submitted, setSubmitted] = useState("all");
 
   const results = useMemo(() => {
-    if (!submitted) return [];
+    if (submitted === "all") return resources;
     if (cache.has(submitted)) return cache.get(submitted)!;
     const r = scoreResources(submitted);
     cache.set(submitted, r);
     return r;
   }, [submitted]);
 
+  const counts = useMemo(
+    () => ({
+      clinics: resources.filter((resource) => resource.type === "clinic").length,
+      ngos: resources.filter((resource) => resource.type === "ngo").length,
+      alerts: resources.filter((resource) => resource.type === "alert").length,
+    }),
+    [],
+  );
+
+  const heading = submitted === "all" ? "Available now" : `Results for "${submitted}"`;
+  const helper = submitted === "all"
+    ? "Showing all cached clinics, NGOs, and community alerts."
+    : `${results.length} matching resource${results.length === 1 ? "" : "s"} found.`;
+
   return (
     <div className="px-4 md:px-8 py-6 md:py-8 max-w-5xl mx-auto">
       <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Resource Availability</h1>
-      <p className="text-muted-foreground mt-1">Ask in plain language. We match against our cached community dataset.</p>
+      <p className="text-muted-foreground mt-1">Browse available community resources immediately, or filter with plain language.</p>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+        <SummaryTile icon={Stethoscope} label="Clinics" value={counts.clinics} />
+        <SummaryTile icon={UsersRound} label="NGOs" value={counts.ngos} />
+        <SummaryTile icon={Siren} label="Alerts" value={counts.alerts} />
+      </div>
 
       <form
-        onSubmit={(e) => { e.preventDefault(); setSubmitted(q.trim()); }}
+        onSubmit={(e) => { e.preventDefault(); setSubmitted(q.trim() || "all"); }}
         className="mt-6 flex gap-2"
       >
         <div className="relative flex-1">
@@ -80,6 +100,12 @@ function AvailabilityPage() {
       </form>
 
       <div className="flex flex-wrap gap-2 mt-3">
+        <button
+          onClick={() => { setQ(""); setSubmitted("all"); }}
+          className="text-xs px-2.5 py-1 rounded-full bg-primary text-primary-foreground hover:opacity-90"
+        >
+          All resources
+        </button>
         {examples.map((ex) => (
           <button
             key={ex}
@@ -91,24 +117,42 @@ function AvailabilityPage() {
         ))}
       </div>
 
-      {submitted && (
-        <div className="mt-8">
-          <div className="bg-card border border-border rounded-xl p-4 mb-4">
-            <div className="text-sm text-muted-foreground">Results for</div>
-            <div className="font-semibold">"{submitted}"</div>
-            <div className="mt-2 text-sm">
-              <span className="font-bold text-primary">{results.length}</span> matching resource{results.length === 1 ? "" : "s"} found.
-            </div>
+      <div className="mt-8">
+        <div className="bg-card border border-border rounded-xl p-4 mb-4">
+          <div className="text-sm text-muted-foreground">{submitted === "all" ? "Resource directory" : "Search"}</div>
+          <div className="font-semibold">{heading}</div>
+          <div className="mt-2 text-sm">
+            {submitted === "all" ? (
+              helper
+            ) : (
+              <>
+                <span className="font-bold text-primary">{results.length}</span> matching resource{results.length === 1 ? "" : "s"} found.
+              </>
+            )}
           </div>
-          {results.length === 0 ? (
-            <p className="text-muted-foreground">No matches. Try a broader keyword like "health" or "youth".</p>
-          ) : (
-            <div className="grid sm:grid-cols-2 gap-4">
-              {results.slice(0, 6).map((r) => <ResourceCard key={r.id} r={r} />)}
-            </div>
-          )}
         </div>
-      )}
+        {results.length === 0 ? (
+          <p className="text-muted-foreground">No matches. Try a broader keyword like "health" or "youth".</p>
+        ) : (
+          <div className="grid sm:grid-cols-2 gap-4">
+            {results.map((r) => <ResourceCard key={r.id} r={r} />)}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SummaryTile({ icon: Icon, label, value }: { icon: typeof Stethoscope; label: string; value: number }) {
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-border bg-card p-3">
+      <div className="grid h-9 w-9 place-items-center rounded-lg bg-secondary text-primary">
+        <Icon className="h-4 w-4" />
+      </div>
+      <div>
+        <div className="text-lg font-bold leading-none">{value}</div>
+        <div className="mt-1 text-xs text-muted-foreground">{label}</div>
+      </div>
     </div>
   );
 }
