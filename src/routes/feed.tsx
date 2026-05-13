@@ -29,13 +29,16 @@ import {
   CAPE_TOWN_REGIONS,
   CHAT_SESSIONS_STORAGE_KEY,
   FEED_STORAGE_KEY,
-  STARTER_POSTS,
   buildAreaThreads,
   detectCapeTownRegion,
+  ensureRegionalStarterPosts,
   loadAreaComments,
   loadChatSessions,
+  loadCommunitySnapshot,
   loadFeedPosts,
+  pingCommunityActivity,
   saveAreaComments,
+  saveCommunitySnapshot,
   writeJson,
   type AreaThread,
   type CapeTownRegion,
@@ -90,6 +93,7 @@ function FeedPage() {
   const [activeTab, setActiveTab] = useState<FeedTab>("Nearby");
   const [regionalFilter, setRegionalFilter] = useState<CapeTownRegion>("CBD & City Bowl");
   const [liveTick, setLiveTick] = useState(0);
+  const [activeCounts, setActiveCounts] = useState<Partial<Record<CapeTownRegion, number>>>({});
 
   useEffect(() => {
     const query = area.trim();
@@ -145,16 +149,40 @@ function FeedPage() {
   }, [user]);
 
   useEffect(() => {
+    let cancelled = false;
     setPosts(loadFeedPosts());
     setChatSessions(loadChatSessions());
     setAreaComments(loadAreaComments());
-    setCommunityLoaded(true);
+
+    async function hydrateCommunity() {
+      const snapshot = await loadCommunitySnapshot();
+      if (cancelled) return;
+      if (snapshot) {
+        setPosts(ensureRegionalStarterPosts(snapshot.posts));
+        setChatSessions(snapshot.chatSessions);
+        setAreaComments(snapshot.areaComments);
+        setActiveCounts(snapshot.activeCounts);
+      }
+      setCommunityLoaded(true);
+    }
+
+    void hydrateCommunity();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
     if (!communityLoaded) return;
-    writeJson(FEED_STORAGE_KEY, posts.length ? posts : STARTER_POSTS);
-  }, [communityLoaded, posts]);
+    writeJson(FEED_STORAGE_KEY, posts);
+    writeJson(CHAT_SESSIONS_STORAGE_KEY, chatSessions);
+    saveAreaComments(areaComments);
+    void saveCommunitySnapshot({
+      posts: realPosts(posts),
+      chatSessions,
+      areaComments,
+    });
+  }, [areaComments, chatSessions, communityLoaded, posts]);
 
   useEffect(() => {
     const channel = "BroadcastChannel" in window ? new BroadcastChannel("community-feed") : null;
@@ -163,6 +191,13 @@ function FeedPage() {
       if (!storageKey || storageKey === FEED_STORAGE_KEY) setPosts(loadFeedPosts());
       if (!storageKey || storageKey === CHAT_SESSIONS_STORAGE_KEY) setChatSessions(loadChatSessions());
       if (!storageKey || storageKey === AREA_COMMENTS_STORAGE_KEY) setAreaComments(loadAreaComments());
+      void loadCommunitySnapshot().then((snapshot) => {
+        if (!snapshot) return;
+        setPosts(ensureRegionalStarterPosts(snapshot.posts));
+        setChatSessions(snapshot.chatSessions);
+        setAreaComments(snapshot.areaComments);
+        setActiveCounts(snapshot.activeCounts);
+      });
       setLiveTick((current) => current + 1);
     };
 
@@ -178,6 +213,27 @@ function FeedPage() {
       window.clearInterval(timer);
     };
   }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setActiveCounts({});
+      return;
+    }
+
+    let cancelled = false;
+    const regionToReport = user.currentLocation?.region ?? user.permanentLocation.region;
+    const ping = async () => {
+      const snapshot = await pingCommunityActivity(regionToReport);
+      if (!cancelled && snapshot) setActiveCounts(snapshot.activeCounts);
+    };
+
+    void ping();
+    const timer = window.setInterval(() => void ping(), 45_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [user]);
 
   const canPost = message.trim().length > 0 || image;
   const draftAnalysis = useMemo(() => analyzeIncident(message, Boolean(image)), [message, image]);
@@ -221,12 +277,9 @@ function FeedPage() {
 
   const liveActivity = useMemo(() => {
     const alerts = selectedRegionalThread.posts.filter((post) => post.category === "Alert" || post.category === "Safety Issue").length;
-    const active = Math.max(
-      1,
-      selectedRegionalThread.posts.length * 3 + selectedRegionalThread.comments.length * 2 + selectedRegionalThread.chats.length + (liveTick % 9),
-    );
+    const active = activeCounts[selectedRegionalThread.region] ?? 0;
     return [{ region: selectedRegionalThread.region, alerts, active }];
-  }, [liveTick, selectedRegionalThread]);
+  }, [activeCounts, liveTick, selectedRegionalThread]);
 
   const broadcastCommunityChange = () => {
     if ("BroadcastChannel" in window) {
@@ -603,7 +656,7 @@ function FeedPage() {
               <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                 {liveActivity.map((item) => (
                   <span key={item.region} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1">
-                    <Radio className="h-3.5 w-3.5 text-emerald-500" /> {item.alerts > 0 ? `${item.alerts} new alerts in ${item.region}` : `${item.active} people active in ${item.region}`}
+                    <Radio className="h-3.5 w-3.5 text-emerald-500" /> {item.alerts > 0 ? `${item.alerts} new alerts in ${item.region}` : activePeopleLabel(item.active, item.region)}
                   </span>
                 ))}
               </div>
@@ -1043,6 +1096,16 @@ function deleteOwnCommentTree(comments: CommunityComment[], targetId: string, cu
 function engagementForPost(post: CommunityPost, commentsByArea: Record<string, CommunityComment[]>) {
   const region = post.region ?? detectCapeTownRegion(post.area, post.coords);
   return countComments(commentsByArea[region] ?? []) + (post.image ? 2 : 0) + (post.category === "Alert" || post.category === "Safety Issue" ? 3 : 0);
+}
+
+function realPosts(posts: CommunityPost[]) {
+  return posts.filter((post) => !post.id.startsWith("starter-"));
+}
+
+function activePeopleLabel(count: number, region: CapeTownRegion) {
+  if (count === 0) return `No signed-in people active in ${region}`;
+  if (count === 1) return `1 signed-in person active in ${region}`;
+  return `${count} signed-in people active in ${region}`;
 }
 
 function summarizeTrending(thread: AreaThread) {

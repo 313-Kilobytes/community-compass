@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Search, Loader2, ShoppingCart, ExternalLink, Plus, Tag, Store, Clock, Trash2 } from "lucide-react";
+import { Search, Loader2, ShoppingCart, ExternalLink, Plus, Tag, Store, Clock, Trash2, MapPin, PackageCheck } from "lucide-react";
 import { useCart } from "@/lib/cart";
 import { useT } from "@/lib/i18n";
 
@@ -23,6 +23,10 @@ type Offer = {
   description: string;
   matchedQuery?: string;
   operatingHours?: StoreHours;
+  image?: string;
+  availability?: string;
+  storeLocation?: string;
+  relevance?: number;
 };
 
 const GROCERY_SEARCH_STORAGE_KEY = "community-grocery-search";
@@ -97,7 +101,7 @@ function GroceriesPage() {
     } finally { setLoading(false); }
   };
 
-  const cheapest = offers[0];
+  const cheapest = [...offers].sort((a, b) => a.price - b.price)[0];
 
   return (
     <div className="px-4 md:px-10 py-8 md:py-10 max-w-7xl mx-auto">
@@ -165,7 +169,7 @@ function GroceriesPage() {
       ) : (
         <>
         <div className="mb-4 rounded-xl border border-border bg-card p-3 text-sm text-muted-foreground">
-          Showing sourced prices that matched every word in <span className="font-semibold text-foreground">"{exactQuery}"</span>. Prices are extracted from the linked pages.
+          Showing verified grocery product listings from trusted supermarket sources for <span className="font-semibold text-foreground">"{exactQuery}"</span>.
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {offers.map((o) => {
@@ -174,31 +178,50 @@ function GroceriesPage() {
             return (
               <div key={o.id} className={`group bg-card text-card-foreground rounded-2xl border p-5 hover:shadow-elegant hover:-translate-y-0.5 transition-all flex flex-col ${isCheapest ? "border-success/60" : "border-border hover:border-primary/30"}`}>
                 <div className="flex items-start justify-between gap-3 mb-3">
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-secondary text-secondary-foreground">
-                    <Store className="h-3.5 w-3.5" /> {o.store}
-                  </span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-secondary text-secondary-foreground">
+                      <Store className="h-3.5 w-3.5" /> {o.store}
+                    </span>
+                    {o.operatingHours && (
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase ${statusClass}`}>
+                        {o.operatingHours.status === "closing-soon" ? "Closing soon" : o.operatingHours.status}
+                      </span>
+                    )}
+                  </div>
                   {isCheapest && (
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-success/15 text-[color:var(--success)] border border-success/30">
                       {t("groc.bestPrice")}
                     </span>
                   )}
                 </div>
-                {o.operatingHours && (
-                  <div className="mb-3">
-                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase ${statusClass}`}>
-                      {o.operatingHours.status === "closing-soon" ? "Closing soon" : o.operatingHours.status}
-                    </span>
-                  </div>
-                )}
+                <div className="mb-3 aspect-[4/3] overflow-hidden rounded-xl border border-border bg-secondary/35">
+                  {o.image ? (
+                    <img src={o.image} alt={o.title} className="h-full w-full object-contain p-3" loading="lazy" />
+                  ) : (
+                    <div className="grid h-full place-items-center text-muted-foreground">
+                      <Tag className="h-8 w-8" />
+                    </div>
+                  )}
+                </div>
                 <h3 className="font-display font-semibold text-base leading-snug line-clamp-2">{o.title}</h3>
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/35 px-2 py-1">
+                    <PackageCheck className="h-3.5 w-3.5 text-primary" /> {o.availability ?? "Availability not shown"}
+                  </span>
+                  {o.storeLocation && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/35 px-2 py-1">
+                      <MapPin className="h-3.5 w-3.5 text-primary" /> {o.storeLocation}
+                    </span>
+                  )}
+                </div>
                 <div className="mt-3 flex items-baseline gap-2">
                   <span className="text-2xl font-bold tracking-tight tabular-nums">{o.priceText}</span>
-                  <span className="text-xs text-muted-foreground">sourced</span>
+                  <span className="text-xs text-muted-foreground">verified retailer</span>
                 </div>
-                {o.operatingHours && (
+                {o.operatingHours ? (
                   <div className="mt-3 rounded-xl border border-border bg-secondary/35 px-3 py-2 text-xs text-muted-foreground">
                     <div className="flex items-center gap-1.5 font-semibold text-foreground">
-                      <Clock className="h-3.5 w-3.5 text-primary" /> Operating hours
+                      <Clock className="h-3.5 w-3.5 text-primary" /> Operating status
                     </div>
                     <p className="mt-1">{o.operatingHours.statusLabel}</p>
                     <p className="mt-0.5">{o.operatingHours.today ?? o.operatingHours.summary}</p>
@@ -206,6 +229,13 @@ function GroceriesPage() {
                     <a href={o.operatingHours.source} target="_blank" rel="noreferrer noopener" className="mt-1 inline-flex items-center gap-1 font-semibold text-primary hover:underline">
                       Verify hours <ExternalLink className="h-3 w-3" />
                     </a>
+                  </div>
+                ) : (
+                  <div className="mt-3 rounded-xl border border-border bg-secondary/35 px-3 py-2 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-1.5 font-semibold text-foreground">
+                      <Clock className="h-3.5 w-3.5 text-primary" /> Operating status
+                    </div>
+                    <p className="mt-1">Store hours unavailable from the retailer source.</p>
                   </div>
                 )}
                 {o.description && <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{o.description}</p>}

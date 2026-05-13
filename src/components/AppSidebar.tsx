@@ -10,8 +10,10 @@ import {
   ShoppingCart,
   Newspaper,
   UserRound,
+  ShieldCheck,
 } from "lucide-react";
 import { useT } from "@/lib/i18n";
+import { useAuth } from "@/lib/auth";
 
 const items = [
   { title: "nav.resources" as const, url: "/", icon: LayoutGrid },
@@ -25,10 +27,13 @@ const items = [
   { title: "nav.profile" as const, url: "/profile", icon: UserRound },
 ];
 
+const adminItem = { title: "nav.admin" as const, url: "/admin", icon: ShieldCheck };
+
 export function AppSidebar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { t } = useT();
-
+  const { user } = useAuth();
+  const visibleItems = user?.role === "super_admin" ? [...items, adminItem] : items;
   return (
     <aside className="relative hidden w-64 shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
       <div
@@ -53,7 +58,7 @@ export function AppSidebar() {
         </div>
       </div>
       <nav className="relative flex-1 p-3 space-y-1">
-        {items.map((it) => {
+        {visibleItems.map((it) => {
           const active = pathname === it.url;
           return (
             <Link
@@ -92,10 +97,15 @@ export function AppSidebar() {
 export function MobileNav() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { t } = useT();
+<<<<<<< HEAD
 
+=======
+  const { user } = useAuth();
+  const visibleItems = user?.role === "super_admin" ? [...items, adminItem] : items;
+>>>>>>> origin/main
   return (
     <nav className="md:hidden fixed bottom-3 inset-x-3 glass border border-border rounded-2xl shadow-elegant flex gap-1 overflow-x-auto py-2 px-2 z-50">
-      {items.map((it) => {
+      {visibleItems.map((it) => {
         const active = pathname === it.url;
         return (
           <Link
