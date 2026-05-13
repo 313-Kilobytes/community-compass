@@ -56,10 +56,30 @@ type LocationHit = {
   lng: number;
 };
 
+type CommunityPlace = {
+  id: string;
+  name: string;
+  category: string;
+  address: string;
+  rating?: number;
+  lat: number;
+  lng: number;
+};
+
 type FeedTab = "Nearby" | "Trending" | "Latest" | "Municipal Alerts";
 
 const POST_CATEGORIES: PostCategory[] = ["Alert", "Event", "Job", "Community Update", "Safety Issue"];
 const FEED_TABS: FeedTab[] = ["Nearby", "Trending", "Latest", "Municipal Alerts"];
+const DEFAULT_MAP_CENTER = { lat: -33.9249, lng: 18.4241 };
+const PLACE_SEARCHES = [
+  { category: "Nearby places", type: "point_of_interest", keyword: "community" },
+  { category: "Clinics", type: "hospital", keyword: "clinic" },
+  { category: "NGOs", type: "point_of_interest", keyword: "NGO community organisation" },
+  { category: "Grocery stores", type: "grocery_or_supermarket", keyword: "grocery supermarket" },
+  { category: "Municipal offices", type: "local_government_office", keyword: "municipal office" },
+  { category: "Emergency services", type: "police", keyword: "emergency police fire ambulance" },
+  { category: "Community hotspots", type: "point_of_interest", keyword: "community centre library market" },
+] as const;
 
 export const Route = createFileRoute("/feed")({
   head: () => ({
@@ -663,6 +683,8 @@ function FeedPage() {
             </div>
           </section>
 
+          <CommunityMap coords={coords} area={area} region={regionalFilter} />
+
           {recentChats.length > 0 && (
             <section className="bg-card border border-border rounded-2xl p-5 shadow-card">
               <div className="flex items-center justify-between gap-3">
@@ -722,6 +744,175 @@ function FeedPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function CommunityMap({
+  coords,
+  area,
+  region,
+}: {
+  coords?: { lat: number; lng: number };
+  area: string;
+  region: CapeTownRegion;
+}) {
+  const [center, setCenter] = useState(coords ?? DEFAULT_MAP_CENTER);
+  const [places, setPlaces] = useState<CommunityPlace[]>([]);
+  const [status, setStatus] = useState("Loading nearby community places...");
+  const [activeCategory, setActiveCategory] = useState("All");
+
+  useEffect(() => {
+    if (coords) setCenter(coords);
+  }, [coords]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPlaces() {
+      try {
+        setStatus("Loading nearby community places...");
+        const params = new URLSearchParams({ lat: String(center.lat), lng: String(center.lng) });
+        const response = await fetch(`/api/community-map?${params.toString()}`);
+        const json = (await response.json()) as { places?: CommunityPlace[]; error?: string };
+        if (!response.ok) throw new Error(json.error ?? "Nearby places could not load");
+        if (cancelled) return;
+
+        const nextPlaces = json.places ?? [];
+        setPlaces(nextPlaces);
+        setStatus(nextPlaces.length ? `${nextPlaces.length} nearby community places found` : "No nearby places found");
+      } catch (error) {
+        if (!cancelled) {
+          setPlaces([]);
+          setStatus(error instanceof Error ? error.message : "Nearby places could not load");
+        }
+      }
+    }
+
+    void loadPlaces();
+    return () => {
+      cancelled = true;
+    };
+  }, [center]);
+
+  const useMapLocation = () => {
+    setStatus("Finding your current location...");
+    navigator.geolocation?.getCurrentPosition(
+      (position) => {
+        setCenter({
+          lat: Number(position.coords.latitude.toFixed(5)),
+          lng: Number(position.coords.longitude.toFixed(5)),
+        });
+      },
+      () => setStatus("Location permission was not granted"),
+    );
+  };
+
+  const visiblePlaces =
+    activeCategory === "All" ? places : places.filter((place) => place.category === activeCategory);
+  const categories = ["All", ...PLACE_SEARCHES.map((search) => search.category)];
+  const centerMapUrl = `https://www.google.com/maps/search/?api=1&query=${center.lat},${center.lng}`;
+
+  return (
+    <section className="bg-card border border-border rounded-2xl p-5 shadow-card">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="font-display font-semibold inline-flex items-center gap-2">
+            <MapPin className="h-4 w-4 text-primary" /> Community Map
+          </h2>
+          <p className="mt-1 text-xs text-muted-foreground">{status}</p>
+        </div>
+        <button
+          type="button"
+          onClick={useMapLocation}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-secondary px-3 py-2 text-xs font-semibold text-secondary-foreground hover:bg-muted"
+        >
+          <LocateFixed className="h-3.5 w-3.5" /> Use my location
+        </button>
+      </div>
+
+      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
+        <div className="relative min-h-[360px] overflow-hidden rounded-xl border border-border bg-[linear-gradient(135deg,rgba(14,165,233,.14),rgba(16,185,129,.12),rgba(250,204,21,.12))]">
+          <div className="absolute inset-0 opacity-35 [background-image:linear-gradient(to_right,currentColor_1px,transparent_1px),linear-gradient(to_bottom,currentColor_1px,transparent_1px)] [background-size:34px_34px]" />
+          <div className="absolute left-4 top-4 rounded-full border border-border bg-card/90 px-3 py-1.5 text-xs font-semibold shadow-card">
+            {area || region}
+          </div>
+          <div className="absolute left-1/2 top-1/2 grid h-14 w-14 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-primary text-primary-foreground shadow-elegant ring-8 ring-primary/20">
+            You
+          </div>
+          {visiblePlaces.slice(0, 16).map((place, index) => {
+            const left = 18 + ((index * 23) % 64);
+            const top = 20 + ((index * 31) % 58);
+            return (
+              <a
+                key={`${place.id}-pin`}
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${place.name} ${place.address}`)}`}
+                target="_blank"
+                rel="noreferrer"
+                className="absolute grid h-8 w-8 place-items-center rounded-full border border-background bg-emerald-500 text-[10px] font-bold text-white shadow-card transition hover:scale-110"
+                style={{ left: `${left}%`, top: `${top}%` }}
+                title={place.name}
+              >
+                {index + 1}
+              </a>
+            );
+          })}
+          <a
+            href={centerMapUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="absolute bottom-4 right-4 rounded-lg bg-card/95 px-3 py-2 text-xs font-semibold text-primary shadow-card hover:underline"
+          >
+            Open in Google Maps
+          </a>
+        </div>
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-1.5">
+            {categories.map((categoryName) => (
+              <button
+                key={categoryName}
+                type="button"
+                onClick={() => setActiveCategory(categoryName)}
+                className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${activeCategory === categoryName ? "border-primary bg-primary text-primary-foreground" : "border-border bg-secondary text-secondary-foreground hover:bg-muted"}`}
+              >
+                {categoryName}
+              </button>
+            ))}
+          </div>
+          <div className="max-h-[300px] space-y-2 overflow-auto pr-1">
+            {visiblePlaces.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border px-3 py-4 text-xs text-muted-foreground">
+                Nearby services will appear here when Google Places returns matches.
+              </div>
+            ) : (
+              visiblePlaces.map((place) => (
+                <div key={place.id} className="rounded-xl border border-border bg-secondary/35 px-3 py-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h3 className="text-sm font-semibold leading-tight">{place.name}</h3>
+                      <p className="mt-1 text-[11px] text-muted-foreground">{place.category}</p>
+                    </div>
+                    {place.rating && (
+                      <span className="rounded-full bg-background px-2 py-0.5 text-[10px] font-bold text-muted-foreground border border-border">
+                        {place.rating.toFixed(1)}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">{place.address}</p>
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${place.name} ${place.address}`)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 inline-flex text-xs font-semibold text-primary hover:underline"
+                  >
+                    Open in Google Maps
+                  </a>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 

@@ -70,7 +70,7 @@ type Analysis = {
   reviews: Review[];
   cached?: boolean;
   fallback?: boolean;
-  analysisProvider?: "huggingface" | "keyword-fallback";
+  analysisProvider?: "huggingface";
 };
 
 const EXAMPLES = ["Checkers", "Woolworths", "Shoprite", "Dis-Chem", "Tygerberg Hospital"];
@@ -371,9 +371,9 @@ function InsightsPage() {
                 <div className="text-xs uppercase tracking-wide text-muted-foreground">
                   Recent Reviews
                 </div>
-                <h3 className="mt-1 text-lg font-semibold">Full reviews and sources</h3>
+                <h3 className="mt-1 text-lg font-semibold">Customer reviews</h3>
               </div>
-              <Badge variant="outline">{Math.min(analysis.reviews.length, 10)} max</Badge>
+              <Badge variant="outline">{analysis.reviews.length}/10 reviews</Badge>
             </div>
             <ScrollArea className="mt-4 h-[380px] pr-3">
               <div className="space-y-3">
@@ -455,7 +455,10 @@ function ReviewItem({ review }: { review: Review }) {
           <span className="text-xs text-muted-foreground">{review.source}</span>
           {review.date && <span className="text-xs text-muted-foreground">{review.date}</span>}
           {review.rating && (
-            <span className="text-xs text-muted-foreground">{review.rating}/5</span>
+            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+              <Star className="h-3 w-3 fill-amber-300 text-amber-300" />
+              {review.rating}/5
+            </span>
           )}
         </div>
         {review.url !== "#" && (
@@ -465,11 +468,11 @@ function ReviewItem({ review }: { review: Review }) {
             rel="noreferrer"
             className="text-xs text-primary hover:underline"
           >
-            Open review source
+            View source
           </a>
         )}
       </div>
-      <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-muted-foreground">
+      <p className="mt-3 break-words text-sm leading-6 text-foreground">
         {review.text}
       </p>
     </article>

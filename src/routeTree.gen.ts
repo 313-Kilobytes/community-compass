@@ -25,6 +25,7 @@ import { Route as ApiTicketsRouteImport } from './routes/api/tickets'
 import { Route as ApiSearchRouteImport } from './routes/api/search'
 import { Route as ApiReviewIntelligenceRouteImport } from './routes/api/review-intelligence'
 import { Route as ApiGroceriesRouteImport } from './routes/api/groceries'
+import { Route as ApiCommunityMapRouteImport } from './routes/api/community-map'
 import { Route as ApiCommunityRouteImport } from './routes/api/community'
 import { Route as ApiAdminRouteImport } from './routes/api/admin'
 import { Route as ApiCommunityActivityRouteImport } from './routes/api/community/activity'
@@ -116,6 +117,11 @@ const ApiGroceriesRoute = ApiGroceriesRouteImport.update({
   path: '/api/groceries',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCommunityMapRoute = ApiCommunityMapRouteImport.update({
+  id: '/api/community-map',
+  path: '/api/community-map',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiCommunityRoute = ApiCommunityRouteImport.update({
   id: '/api/community',
   path: '/api/community',
@@ -182,6 +188,7 @@ export interface FileRoutesByFullPath {
   '/signup': typeof SignupRoute
   '/api/admin': typeof ApiAdminRouteWithChildren
   '/api/community': typeof ApiCommunityRouteWithChildren
+  '/api/community-map': typeof ApiCommunityMapRoute
   '/api/groceries': typeof ApiGroceriesRoute
   '/api/review-intelligence': typeof ApiReviewIntelligenceRoute
   '/api/search': typeof ApiSearchRoute
@@ -210,6 +217,7 @@ export interface FileRoutesByTo {
   '/signup': typeof SignupRoute
   '/api/admin': typeof ApiAdminRouteWithChildren
   '/api/community': typeof ApiCommunityRouteWithChildren
+  '/api/community-map': typeof ApiCommunityMapRoute
   '/api/groceries': typeof ApiGroceriesRoute
   '/api/review-intelligence': typeof ApiReviewIntelligenceRoute
   '/api/search': typeof ApiSearchRoute
@@ -239,6 +247,7 @@ export interface FileRoutesById {
   '/signup': typeof SignupRoute
   '/api/admin': typeof ApiAdminRouteWithChildren
   '/api/community': typeof ApiCommunityRouteWithChildren
+  '/api/community-map': typeof ApiCommunityMapRoute
   '/api/groceries': typeof ApiGroceriesRoute
   '/api/review-intelligence': typeof ApiReviewIntelligenceRoute
   '/api/search': typeof ApiSearchRoute
@@ -269,6 +278,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/api/admin'
     | '/api/community'
+    | '/api/community-map'
     | '/api/groceries'
     | '/api/review-intelligence'
     | '/api/search'
@@ -297,6 +307,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/api/admin'
     | '/api/community'
+    | '/api/community-map'
     | '/api/groceries'
     | '/api/review-intelligence'
     | '/api/search'
@@ -325,6 +336,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/api/admin'
     | '/api/community'
+    | '/api/community-map'
     | '/api/groceries'
     | '/api/review-intelligence'
     | '/api/search'
@@ -354,6 +366,7 @@ export interface RootRouteChildren {
   SignupRoute: typeof SignupRoute
   ApiAdminRoute: typeof ApiAdminRouteWithChildren
   ApiCommunityRoute: typeof ApiCommunityRouteWithChildren
+  ApiCommunityMapRoute: typeof ApiCommunityMapRoute
   ApiGroceriesRoute: typeof ApiGroceriesRoute
   ApiReviewIntelligenceRoute: typeof ApiReviewIntelligenceRoute
   ApiSearchRoute: typeof ApiSearchRoute
@@ -478,6 +491,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiGroceriesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/community-map': {
+      id: '/api/community-map'
+      path: '/api/community-map'
+      fullPath: '/api/community-map'
+      preLoaderRoute: typeof ApiCommunityMapRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/community': {
       id: '/api/community'
       path: '/api/community'
@@ -594,6 +614,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignupRoute: SignupRoute,
   ApiAdminRoute: ApiAdminRouteWithChildren,
   ApiCommunityRoute: ApiCommunityRouteWithChildren,
+  ApiCommunityMapRoute: ApiCommunityMapRoute,
   ApiGroceriesRoute: ApiGroceriesRoute,
   ApiReviewIntelligenceRoute: ApiReviewIntelligenceRoute,
   ApiSearchRoute: ApiSearchRoute,
