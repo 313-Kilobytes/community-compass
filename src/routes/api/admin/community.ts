@@ -1,11 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
-  clearCommunityHistory,
   deleteCommunityComment,
   deleteCommunityPost,
   getCommunitySnapshot,
 } from "@/lib/server/community-store";
-import { getAdminOperations } from "@/lib/server/admin-store";
+import { auditAdminAction, getAdminOperations } from "@/lib/server/admin-store";
 import { json, requireSuperAdmin } from "@/lib/server/auth";
 
 export const Route = createFileRoute("/api/admin/community")({
@@ -20,10 +19,17 @@ export const Route = createFileRoute("/api/admin/community")({
         const type = url.searchParams.get("type");
         const id = url.searchParams.get("id");
 
-        if (type === "post" && id) return json({ community: await deleteCommunityPost(id), operations: await getAdminOperations() });
-        if (type === "comment" && id) return json({ community: await deleteCommunityComment(id), operations: await getAdminOperations() });
-        if (type === "all") return json({ community: await clearCommunityHistory(), operations: await getAdminOperations() });
-        return json({ error: "Choose post, comment, or all." }, { status: 400 });
+        if (type === "post" && id) {
+          const community = await deleteCommunityPost(id);
+          await auditAdminAction("Post removed", `${id} removed from community history`, admin.user.username);
+          return json({ community, operations: await getAdminOperations() });
+        }
+        if (type === "comment" && id) {
+          const community = await deleteCommunityComment(id);
+          await auditAdminAction("Comment removed", `${id} removed from community history`, admin.user.username);
+          return json({ community, operations: await getAdminOperations() });
+        }
+        return json({ error: "Bulk history clearing is disabled to protect analytics and accountability." }, { status: 400 });
       },
       GET: async ({ request }: { request: Request }) => {
         const admin = await requireSuperAdmin(request);

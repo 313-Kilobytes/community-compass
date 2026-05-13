@@ -25,6 +25,8 @@ export type AdminBroadcast = {
   region: CapeTownRegion;
   type: string;
   message: string;
+  source?: string;
+  deliveredTo?: number;
   createdAt: string;
 };
 
@@ -45,6 +47,16 @@ export type AdminOperations = {
   keywords: string[];
   tickets: AdminTicket[];
   auditLogs: AdminAuditLog[];
+};
+
+export type ExternalAlert = {
+  id: string;
+  title: string;
+  summary: string;
+  region: CapeTownRegion;
+  severity: "Low" | "Medium" | "High";
+  source: string;
+  publishedAt: string;
 };
 
 const defaultCategories = ["Crime", "Safety", "Services", "Alerts", "Infrastructure", "Medical", "Weather", "Scams"];
@@ -96,7 +108,7 @@ async function ensureAdminLoaded() {
       userStatuses: sanitizeRecord(parsed.userStatuses),
       incidentStatuses: sanitizeRecord(parsed.incidentStatuses),
       aiSensitivity: clampNumber(parsed.aiSensitivity, 30, 95, 68),
-      broadcasts: Array.isArray(parsed.broadcasts) ? parsed.broadcasts.slice(0, 50) as AdminBroadcast[] : [],
+      broadcasts: Array.isArray(parsed.broadcasts) ? parsed.broadcasts.map(sanitizeBroadcast).filter((item): item is AdminBroadcast => Boolean(item)).slice(0, 50) : [],
       categories: sanitizeStringList(parsed.categories, defaultCategories),
       keywords: sanitizeStringList(parsed.keywords, defaultKeywords),
       tickets: Array.isArray(parsed.tickets) ? parsed.tickets.map(sanitizeTicket).filter((ticket): ticket is AdminTicket => Boolean(ticket)) : [],
@@ -105,6 +117,38 @@ async function ensureAdminLoaded() {
   } catch {
     globalStore.__adminOperations ??= emptyStore();
   }
+}
+
+function sanitizeBroadcast(value: unknown): AdminBroadcast | null {
+  if (!value || typeof value !== "object") return null;
+  const item = value as Partial<AdminBroadcast>;
+  const message = sanitizeText(item.message, "", 1000);
+  if (!message) return null;
+  return {
+    id: sanitizeText(item.id, crypto.randomUUID(), 120),
+    region: sanitizeRegion(item.region),
+    type: sanitizeText(item.type, "General", 60),
+    message,
+    source: sanitizeText(item.source, "", 180) || undefined,
+    deliveredTo: Math.max(0, Math.floor(Number(item.deliveredTo) || 0)),
+    createdAt: sanitizeDate(item.createdAt, new Date().toISOString()),
+  };
+}
+
+function sanitizeRegion(value: unknown): CapeTownRegion {
+  const regions: CapeTownRegion[] = [
+    "Southern Suburbs",
+    "Northern Suburbs",
+    "Cape Flats",
+    "West Coast",
+    "Atlantic Seaboard",
+    "CBD & City Bowl",
+    "Helderberg",
+    "Atlantis",
+    "South Peninsula",
+    "Table View & Blouberg",
+  ];
+  return regions.includes(value as CapeTownRegion) ? (value as CapeTownRegion) : "CBD & City Bowl";
 }
 
 async function saveAdmin() {
@@ -170,15 +214,17 @@ function sanitizeDate(value: unknown, fallback: string) {
   return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : fallback;
 }
 
-async function audit(action: string, detail: string, actor: string) {
+export async function auditAdminAction(action: string, detail: string, actor: string) {
+  await ensureAdminLoaded();
   store().auditLogs.unshift({
     id: crypto.randomUUID(),
     action,
-    detail,
+    detail: `${detail} - by ${actor}`,
     actor,
     createdAt: new Date().toISOString(),
   });
   store().auditLogs = store().auditLogs.slice(0, 100);
+  await saveAdmin();
 }
 
 export async function getAdminOperations() {
@@ -190,7 +236,7 @@ export async function setUserStatus(userId: string, status: AdminUserStatus, act
   await ensureAdminLoaded();
   if (!["Active", "Warned", "Muted 24h", "Banned 7d", "Suspended"].includes(status)) return { error: "Invalid user status." };
   store().userStatuses[userId] = { status, updatedAt: new Date().toISOString() };
-  await audit("User enforcement updated", `${userId} set to ${status}`, actor);
+  await auditAdminAction("User enforcement updated", `${userId} set to ${status}`, actor);
   await saveAdmin();
   return { operations: store() };
 }
@@ -199,7 +245,7 @@ export async function setIncidentStatus(postId: string, status: AdminIncidentSta
   await ensureAdminLoaded();
   if (!["Verified", "Under Review", "False Information", "Resolved"].includes(status)) return { error: "Invalid incident status." };
   store().incidentStatuses[postId] = { status, updatedAt: new Date().toISOString() };
-  await audit("Incident status updated", `${postId} set to ${status}`, actor);
+  await auditAdminAction("Incident status updated", `${postId} set to ${status}`, actor);
   await saveAdmin();
   return { operations: store() };
 }
@@ -207,7 +253,7 @@ export async function setIncidentStatus(postId: string, status: AdminIncidentSta
 export async function setAiSensitivity(value: number, actor: string) {
   await ensureAdminLoaded();
   store().aiSensitivity = clampNumber(value, 30, 95, 68);
-  await audit("AI sensitivity updated", `Sensitivity set to ${store().aiSensitivity}%`, actor);
+  await auditAdminAction("AI sensitivity updated", `Sensitivity set to ${store().aiSensitivity}%`, actor);
   await saveAdmin();
   return { operations: store() };
 }
@@ -216,17 +262,45 @@ export async function createBroadcast(region: CapeTownRegion, type: string, mess
   await ensureAdminLoaded();
   const cleanMessage = sanitizeText(message, "", 1000);
   if (!cleanMessage) return { error: "Broadcast message is required." };
-  const broadcast = { id: crypto.randomUUID(), region, type: sanitizeText(type, "General", 60), message: cleanMessage, createdAt: new Date().toISOString() };
+  const broadcast = { id: crypto.randomUUID(), region, type: sanitizeText(type, "General", 60), message: cleanMessage, deliveredTo: 0, createdAt: new Date().toISOString() };
   store().broadcasts.unshift(broadcast);
   store().broadcasts = store().broadcasts.slice(0, 50);
-  await audit("Broadcast sent", `${broadcast.type} sent to ${region}`, actor);
+  await auditAdminAction("Broadcast sent", `${broadcast.type} sent to ${region}`, actor);
   await saveAdmin();
   return { operations: store() };
 }
 
 export async function listBroadcastsForRegion(region: CapeTownRegion) {
   await ensureAdminLoaded();
-  return store().broadcasts.filter((broadcast) => broadcast.region === region).slice(0, 10);
+  const broadcasts = store().broadcasts
+    .filter((broadcast) => broadcast.region === region && isCapeTownBroadcast(broadcast))
+    .slice(0, 20);
+  return broadcasts.length ? broadcasts : fallbackBroadcastsForRegion(region);
+}
+
+export async function syncExternalAlerts(actor: string) {
+  await ensureAdminLoaded();
+  const alerts = await fetchExternalAlerts();
+  let created = 0;
+  for (const alert of alerts) {
+    const duplicate = store().broadcasts.some((broadcast) => broadcast.source === alert.source || broadcast.message.includes(alert.title));
+    if (duplicate) continue;
+    if (alert.severity !== "High" && alert.severity !== "Medium") continue;
+    store().broadcasts.unshift({
+      id: crypto.randomUUID(),
+      region: alert.region,
+      type: alert.severity === "High" ? "Emergency alert" : "Public warning",
+      message: `${alert.title}: ${alert.summary}`,
+      source: alert.source,
+      deliveredTo: 0,
+      createdAt: alert.publishedAt,
+    });
+    created += 1;
+  }
+  store().broadcasts = store().broadcasts.slice(0, 50);
+  await auditAdminAction("External alert sync", `${created} public alerts prepared for affected regions`, actor);
+  await saveAdmin();
+  return { operations: store(), alerts, created };
 }
 
 export async function addCategory(category: string, actor: string) {
@@ -234,7 +308,7 @@ export async function addCategory(category: string, actor: string) {
   const clean = sanitizeText(category, "", 60);
   if (!clean) return { error: "Category is required." };
   if (!store().categories.some((item) => item.toLowerCase() === clean.toLowerCase())) store().categories.push(clean);
-  await audit("Category added", clean, actor);
+  await auditAdminAction("Category added", clean, actor);
   await saveAdmin();
   return { operations: store() };
 }
@@ -244,7 +318,7 @@ export async function addKeyword(keyword: string, actor: string) {
   const clean = sanitizeText(keyword, "", 60);
   if (!clean) return { error: "Keyword is required." };
   if (!store().keywords.some((item) => item.toLowerCase() === clean.toLowerCase())) store().keywords.push(clean);
-  await audit("Moderation keyword added", clean, actor);
+  await auditAdminAction("Moderation keyword added", clean, actor);
   await saveAdmin();
   return { operations: store() };
 }
@@ -270,7 +344,7 @@ export async function createTicket(user: { userId: string; username: string; ema
     updatedAt: now,
   };
   store().tickets.unshift(ticket);
-  await audit("Ticket created", `${ticket.subject} from ${user.username}`, user.username);
+  await auditAdminAction("Ticket created", `${ticket.subject} from ${user.username}`, user.username);
   await saveAdmin();
   return { ticket };
 }
@@ -288,7 +362,155 @@ export async function updateTicket(ticketId: string, patch: Partial<AdminTicket>
   if (patch.priority && ["Low", "Medium", "High", "Urgent"].includes(patch.priority)) ticket.priority = patch.priority;
   if ("adminResponse" in patch) ticket.adminResponse = sanitizeText(patch.adminResponse, "", 2000) || undefined;
   ticket.updatedAt = new Date().toISOString();
-  await audit("Ticket updated", `${ticket.subject} set to ${ticket.status}`, actor);
+  await auditAdminAction("Ticket updated", `${ticket.subject} set to ${ticket.status}`, actor);
   await saveAdmin();
   return { operations: store() };
+}
+
+async function fetchExternalAlerts(): Promise<ExternalAlert[]> {
+  const sources = [
+    "https://www.capetown.gov.za/",
+    "https://www.capetown.gov.za/Local%20and%20communities/",
+    "https://www.capetown.gov.za/Family%20and%20home/",
+    "https://www.westerncape.gov.za/news",
+  ];
+  const fetched = await Promise.all(sources.map((source) => fetchCapeTownSource(source)));
+  const alerts = fetched.flat();
+  return dedupeAlerts(alerts.length ? alerts : fallbackCapeTownAlerts());
+}
+
+async function fetchCapeTownSource(source: string): Promise<ExternalAlert[]> {
+  try {
+    const response = await fetch(source, { headers: { "User-Agent": "CommunityHub/1.0" } });
+    if (!response.ok) return [];
+    const html = await response.text();
+    return parseCapeTownAlerts(html, source);
+  } catch {
+    return [];
+  }
+}
+
+function parseCapeTownAlerts(html: string, source: string): ExternalAlert[] {
+  const text = decodeHtml(html.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " "));
+  const compact = text.replace(/\s+/g, " ").trim();
+  const alertPhrases = [
+    /(?:SONA|Cycle Tour|Two Oceans Marathon|Cape Town Carnival)[^.!?]{0,180}(?:road closures|roads? will be closed|restrictions)[^.!?]{0,260}/gi,
+    /(?:road closures|roads? will be closed|road closures and restrictions)[^.!?]{0,260}/gi,
+    /(?:planned water maintenance|critical electricity work|load[- ]shedding|weather updates|adverse weather|localised flooding|electricity outages)[^.!?]{0,260}/gi,
+  ];
+  const alerts: ExternalAlert[] = [];
+  for (const pattern of alertPhrases) {
+    for (const match of compact.matchAll(pattern)) {
+      const summary = cleanAlertText(match[0]);
+      if (!summary || !isCapeTownRelevantText(summary)) continue;
+      const title = titleFromAlert(summary);
+      alerts.push({
+        id: `${source}-${title}-${summary}`.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 140),
+        title,
+        summary,
+        region: regionFromText(summary),
+        severity: severityFromText(summary),
+        source,
+        publishedAt: new Date().toISOString(),
+      });
+    }
+  }
+  return alerts.slice(0, 5);
+}
+
+function fallbackCapeTownAlerts(): ExternalAlert[] {
+  const now = new Date().toISOString();
+  return [
+    {
+      id: "city-cno-weather-updates",
+      title: "Cape Town weather updates",
+      summary: "City of Cape Town notice: Subscribe to CNO Weather updates and monitor City channels for severe weather, flooding, wind, and service disruption notices.",
+      region: "CBD & City Bowl",
+      severity: "Medium",
+      source: "https://www.capetown.gov.za/",
+      publishedAt: now,
+    },
+    {
+      id: "city-service-alerts",
+      title: "Critical service updates",
+      summary: "City of Cape Town notice: Check current City channels for critical electricity work, planned water maintenance, road closures, and service faults in your area.",
+      region: "CBD & City Bowl",
+      severity: "Medium",
+      source: "https://www.capetown.gov.za/",
+      publishedAt: now,
+    },
+  ];
+}
+
+function fallbackBroadcastsForRegion(region: CapeTownRegion): AdminBroadcast[] {
+  return fallbackCapeTownAlerts().map((alert) => ({
+    id: `${alert.id}-${region}`,
+    region,
+    type: alert.title,
+    message: alert.summary,
+    source: alert.source,
+    deliveredTo: 0,
+    createdAt: alert.publishedAt,
+  }));
+}
+
+function dedupeAlerts(alerts: ExternalAlert[]) {
+  const seen = new Set<string>();
+  return alerts.filter((alert) => {
+    const key = `${alert.title}-${alert.region}`.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 8);
+}
+
+function cleanAlertText(value: string) {
+  return value.replace(/\s+/g, " ").replace(/\s+close alerts\s*/i, " ").trim().slice(0, 420);
+}
+
+function decodeHtml(value: string) {
+  return value
+    .replaceAll("&amp;", "&")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&quot;", "\"")
+    .replaceAll("&#39;", "'")
+    .replaceAll("&nbsp;", " ");
+}
+
+function titleFromAlert(text: string) {
+  if (/road closure|roads? will be closed|restrictions/i.test(text)) return "Road closure";
+  if (/weather|flood|wind|storm|rain/i.test(text)) return "Weather alert";
+  if (/electricity|load[- ]shedding/i.test(text)) return "Electricity update";
+  if (/water/i.test(text)) return "Water service update";
+  return "Cape Town public notice";
+}
+
+function severityFromText(text: string): ExternalAlert["severity"] {
+  if (/severe|emergency|flood|evacuat|outage|closed|closure|adverse weather|critical/i.test(text)) return "High";
+  if (/warning|maintenance|restriction|load[- ]shedding|weather/i.test(text)) return "Medium";
+  return "Low";
+}
+
+function isCapeTownBroadcast(broadcast: AdminBroadcast) {
+  if (!broadcast.source) return true;
+  return isCapeTownRelevantText(`${broadcast.type} ${broadcast.message} ${broadcast.source}`);
+}
+
+function isCapeTownRelevantText(text: string) {
+  return /cape town|capetown\.gov\.za|western cape|westerncape\.gov\.za|south africa|city channels|city of cape town|cno weather|myciti|table mountain|green point|sea point|cbd|city bowl|southern suburbs|cape flats|northern suburbs|blouberg|mitchells plain|khayelitsha|bellville|claremont|muizenberg/i.test(text);
+}
+
+function regionFromText(text: string): CapeTownRegion {
+  const lower = text.toLowerCase();
+  if (/khayelitsha|mitchells plain|gugulethu|langa|nyanga|philippi|athlone|cape flats/.test(lower)) return "Cape Flats";
+  if (/bellville|durbanville|brackenfell|parow|northern suburbs/.test(lower)) return "Northern Suburbs";
+  if (/claremont|rondebosch|wynberg|constantia|southern suburbs/.test(lower)) return "Southern Suburbs";
+  if (/somerset west|strand|helderberg|gordon/.test(lower)) return "Helderberg";
+  if (/table view|blouberg|milnerton/.test(lower)) return "Table View & Blouberg";
+  if (/sea point|camps bay|green point|hout bay|atlantic/.test(lower)) return "Atlantic Seaboard";
+  if (/muizenberg|fish hoek|simon|noordhoek|south peninsula/.test(lower)) return "South Peninsula";
+  if (/atlantis|mamre/.test(lower)) return "Atlantis";
+  if (/west coast|melkbos/.test(lower)) return "West Coast";
+  return "CBD & City Bowl";
 }

@@ -312,6 +312,17 @@ export async function saveCommunitySnapshot(input: {
   return getCommunitySnapshot();
 }
 
+export async function appendCommunityPost(post: CommunityPost) {
+  await ensureCommunityLoaded();
+  const sanitized = sanitizePost(post);
+  if (!sanitized) return getCommunitySnapshot();
+  if (!store().posts.some((item) => item.id === sanitized.id || (item.message === sanitized.message && item.createdAt === sanitized.createdAt))) {
+    store().posts.unshift(sanitized);
+  }
+  await saveCommunity();
+  return getCommunitySnapshot();
+}
+
 export async function clearCommunityHistory() {
   const supabase = createServerSupabaseClient();
   await Promise.all([
