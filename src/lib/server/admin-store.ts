@@ -224,6 +224,11 @@ export async function createBroadcast(region: CapeTownRegion, type: string, mess
   return { operations: store() };
 }
 
+export async function listBroadcastsForRegion(region: CapeTownRegion) {
+  await ensureAdminLoaded();
+  return store().broadcasts.filter((broadcast) => broadcast.region === region).slice(0, 10);
+}
+
 export async function addCategory(category: string, actor: string) {
   await ensureAdminLoaded();
   const clean = sanitizeText(category, "", 60);
