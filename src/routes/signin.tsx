@@ -4,8 +4,8 @@ import { SignInForm } from "@/components/AuthForms";
 export const Route = createFileRoute("/signin")({
   head: () => ({
     meta: [
-      { title: "Sign In - CommunityHub" },
-      { name: "description", content: "Sign in to your CommunityHub account." },
+      { title: "Sign In - Community Compass" },
+      { name: "description", content: "Sign in to your Community Compass account." },
     ],
   }),
   component: SignInPage,

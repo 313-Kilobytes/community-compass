@@ -1,201 +1,108 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Activity,
   AlertTriangle,
   ArrowRight,
-  BarChart3,
-  Bell,
-  BrainCircuit,
-  CloudRain,
-  Crosshair,
-  ExternalLink,
-  Flame,
-  Gauge,
   HeartHandshake,
-  LocateFixed,
+  Megaphone,
   MapPin,
-  MessageCircle,
-  Newspaper,
   Search,
-  ShieldAlert,
   ShieldCheck,
   ShoppingBasket,
-  ShoppingCart,
   Siren,
-  Sparkles,
   Stethoscope,
-  Zap,
+  UsersRound,
 } from "lucide-react";
-import { analyzeIncident } from "@/lib/crisis-intelligence";
+import { ResourceCard } from "@/components/ResourceCard";
+import { resources, type Resource, type ResourceType } from "@/data/resources";
 import { useT } from "@/lib/i18n";
-import { NearbyLeafletMap } from "@/components/NearbyLeafletMap";
 
-type IncidentType = "Crime" | "Infrastructure" | "Medical" | "Weather" | "Scam" | "Fire";
-type Severity = "High" | "Medium" | "Low";
-type FeedPost = {
-  id: string;
-  area: string;
-  message: string;
-  image?: string;
-  coords?: { lat: number; lng: number };
-  anonymous?: boolean;
-  createdAt: string;
-};
-type DashboardIncident = {
-  type: IncidentType;
-  severity: Severity;
-  source: string;
-  area: string;
-  summary: string;
-  action: string;
-  trust: number;
-  time: string;
-};
-type HotspotRow = {
-  area: string;
-  issue: string;
-  level: number;
-  icon: typeof AlertTriangle;
-  left: number;
-  top: number;
-  coords?: { lat: number; lng: number };
-};
-type NearbyPlace = {
-  id: string;
-  name: string;
-  type: string;
-  lat: number;
-  lng: number;
-  distance: number;
-};
+type Filter = "all" | ResourceType;
 
-const incidentTypeMeta: Record<IncidentType, { icon: typeof AlertTriangle; cls: string }> = {
-  Crime: { icon: ShieldAlert, cls: "bg-red-500/15 text-red-700 dark:text-red-300" },
-  Infrastructure: { icon: Zap, cls: "bg-amber-500/20 text-amber-800 dark:text-amber-200" },
-  Medical: { icon: Stethoscope, cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" },
-  Weather: { icon: CloudRain, cls: "bg-sky-500/15 text-sky-700 dark:text-sky-300" },
-  Scam: { icon: ShieldCheck, cls: "bg-violet-500/15 text-violet-700 dark:text-violet-300" },
-  Fire: { icon: Flame, cls: "bg-orange-500/15 text-orange-700 dark:text-orange-300" },
-};
+const examples = ["clinic", "mental health", "free food", "youth support", "power outage"];
 
-const severityMeta: Record<Severity, string> = {
-  High: "bg-red-500 text-white",
-  Medium: "bg-amber-400 text-amber-950",
-  Low: "bg-emerald-500 text-white",
-};
+function scoreResources(query: string, filter: Filter) {
+  const q = query.toLowerCase().trim();
+  const tokens = q.split(/\s+/).filter(Boolean);
 
-const FEED_STORAGE_KEY = "community-feed-posts";
-
-const severityRank: Record<Severity, number> = { High: 3, Medium: 2, Low: 1 };
-
-function relativeTime(value: string) {
-  const diff = Date.now() - Date.parse(value);
-  if (!Number.isFinite(diff)) return "recently";
-  const minutes = Math.max(0, Math.round(diff / 60000));
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours} hr ago`;
-  return `${Math.round(hours / 24)} day ago`;
+  return resources
+    .filter((resource) => filter === "all" || resource.type === filter)
+    .map((resource) => {
+      const haystack = `${resource.name} ${resource.description} ${resource.location} ${resource.type} ${resource.tags.join(" ")}`.toLowerCase();
+      const score = tokens.reduce((sum, token) => sum + (haystack.includes(token) ? 1 : 0), 0);
+      return { resource, score };
+    })
+    .filter(({ score }) => tokens.length === 0 || score > 0)
+    .sort((a, b) => b.score - a.score || a.resource.name.localeCompare(b.resource.name))
+    .map(({ resource }) => resource);
 }
 
-function positionForArea(area: string, coords?: { lat: number; lng: number }) {
-  if (coords) {
-    return {
-      left: 8 + Math.abs(coords.lng % 1) * 84,
-      top: 8 + Math.abs(coords.lat % 1) * 76,
-    };
-  }
-  let hash = 0;
-  for (const char of area) hash = (hash * 31 + char.charCodeAt(0)) % 9973;
-  return {
-    left: 12 + (hash % 76),
-    top: 14 + ((hash >> 3) % 70),
-  };
-}
-
-function positionNear(origin: { lat: number; lng: number }, place: { lat: number; lng: number }) {
-  const latDelta = Math.max(-0.025, Math.min(0.025, place.lat - origin.lat));
-  const lngDelta = Math.max(-0.025, Math.min(0.025, place.lng - origin.lng));
-  return {
-    left: 50 + (lngDelta / 0.025) * 42,
-    top: 50 - (latDelta / 0.025) * 38,
-  };
-}
-
-function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
-  const toRad = (value: number) => (value * Math.PI) / 180;
-  const earthKm = 6371;
-  const dLat = toRad(b.lat - a.lat);
-  const dLng = toRad(b.lng - a.lng);
-  const lat1 = toRad(a.lat);
-  const lat2 = toRad(b.lat);
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-  return earthKm * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
-}
-
-function placeType(tags: Record<string, string>) {
-  return tags.shop ?? tags.amenity ?? tags.tourism ?? tags.leisure ?? "place";
-}
-
-const resourcePages = [
+const categoryCards: {
+  type: Filter;
+  label: string;
+  description: string;
+  icon: typeof Stethoscope;
+  className: string;
+}[] = [
   {
-    titleKey: "resources.feed.title",
-    descriptionKey: "resources.feed.desc",
-    to: "/feed",
-    icon: Newspaper,
-    cls: "bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-300",
-  },
-  {
-    titleKey: "nav.groceries",
-    descriptionKey: "resources.groceries.desc",
-    to: "/groceries",
-    icon: ShoppingBasket,
-    cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
-  },
-  {
-    titleKey: "nav.cart",
-    descriptionKey: "resources.cart.desc",
-    to: "/cart",
-    icon: ShoppingCart,
-    cls: "bg-sky-500/15 text-sky-700 dark:text-sky-300",
-  },
-  {
-    titleKey: "nav.availability",
-    descriptionKey: "resources.availability.desc",
-    to: "/availability",
+    type: "all",
+    label: "All resources",
+    description: "Clinics, NGOs, alerts, and community support.",
     icon: Search,
-    cls: "bg-violet-500/15 text-violet-700 dark:text-violet-300",
+    className: "bg-primary/10 text-primary",
   },
   {
-    titleKey: "nav.emergency",
-    descriptionKey: "resources.emergency.desc",
+    type: "clinic",
+    label: "Health care",
+    description: "Clinics, counselling, check-ups, and mobile care.",
+    icon: Stethoscope,
+    className: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  },
+  {
+    type: "ngo",
+    label: "Community help",
+    description: "Food, shelter, youth, legal, and family support.",
+    icon: HeartHandshake,
+    className: "bg-sky-500/15 text-sky-700 dark:text-sky-300",
+  },
+  {
+    type: "alert",
+    label: "Local alerts",
+    description: "Outages, road closures, drives, and public notices.",
+    icon: AlertTriangle,
+    className: "bg-amber-500/20 text-amber-800 dark:text-amber-200",
+  },
+];
+
+const nextActions = [
+  {
+    title: "Share a community update",
+    description: "Post local needs, changes, photos, and service updates for your area.",
+    to: "/feed",
+    icon: Megaphone,
+  },
+  {
+    title: "Emergency contacts",
+    description: "Open quick-call numbers for urgent help in South Africa.",
     to: "/emergency",
     icon: Siren,
-    cls: "bg-red-500/15 text-red-700 dark:text-red-300",
   },
   {
-    titleKey: "nav.insights",
-    descriptionKey: "resources.insights.desc",
-    to: "/insights",
-    icon: BarChart3,
-    cls: "bg-amber-500/20 text-amber-800 dark:text-amber-200",
+    title: "Compare grocery prices",
+    description: "Find lower prices and build a simple grocery list.",
+    to: "/groceries",
+    icon: ShoppingBasket,
   },
-  {
-    titleKey: "nav.assistant",
-    descriptionKey: "resources.assistant.desc",
-    to: "/chat",
-    icon: MessageCircle,
-    cls: "bg-teal-500/15 text-teal-700 dark:text-teal-300",
-  },
-] as const;
+];
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Community Crisis Intelligence - CommunityHub" },
-      { name: "description", content: "AI-powered community alerts, resources, incident summaries and crisis intelligence." },
+      { title: "Community Compass - Find Local Resources" },
+      {
+        name: "description",
+        content: "Find clinics, NGOs, alerts, emergency contacts, and local support available to your community.",
+      },
     ],
   }),
   component: ResourcesPage,
@@ -203,416 +110,308 @@ export const Route = createFileRoute("/")({
 
 function ResourcesPage() {
   const { t } = useT();
-  const [feedPosts, setFeedPosts] = useState<FeedPost[]>([]);
-  const [mapOrigin, setMapOrigin] = useState({ lat: -33.9249, lng: 18.4241 });
-  const [nearbyPlaces, setNearbyPlaces] = useState<NearbyPlace[]>([]);
-  const [placesLoading, setPlacesLoading] = useState(false);
-  const [placesError, setPlacesError] = useState<string | null>(null);
+  const resultsRef = useRef<HTMLElement>(null);
+  const shouldScrollToResults = useRef(false);
+  const [query, setQuery] = useState("");
+  const [location, setLocation] = useState("Cape Town, South Africa");
+  const [submittedQuery, setSubmittedQuery] = useState("");
+  const [submittedLocation, setSubmittedLocation] = useState("Cape Town, South Africa");
+  const [filter, setFilter] = useState<Filter>("all");
+  const [remoteResources, setRemoteResources] = useState<Resource[]>([]);
+  const [resourcesLoading, setResourcesLoading] = useState(false);
+  const [resourcesError, setResourcesError] = useState<string | null>(null);
+  const [resourceOrigin, setResourceOrigin] = useState("Cape Town, South Africa");
 
-  useEffect(() => {
-    const loadFeedPosts = () => {
-      try {
-        const saved = localStorage.getItem(FEED_STORAGE_KEY);
-        setFeedPosts(saved ? JSON.parse(saved) : []);
-      } catch {
-        setFeedPosts([]);
-      }
-    };
+  const counts = useMemo(
+    () => ({
+      all: resources.length,
+      clinic: resources.filter((resource) => resource.type === "clinic").length,
+      ngo: resources.filter((resource) => resource.type === "ngo").length,
+      alert: resources.filter((resource) => resource.type === "alert").length,
+    }),
+    [],
+  );
 
-    loadFeedPosts();
-    window.addEventListener("storage", loadFeedPosts);
-    window.addEventListener("focus", loadFeedPosts);
-    return () => {
-      window.removeEventListener("storage", loadFeedPosts);
-      window.removeEventListener("focus", loadFeedPosts);
-    };
-  }, []);
+  const localResults = useMemo(() => scoreResources(submittedQuery, filter), [submittedQuery, filter]);
+  const results = remoteResources.length > 0 ? remoteResources : localResults;
+  const hasSearch = submittedQuery.trim().length > 0 || filter !== "all";
+  const featured = results.slice(0, hasSearch ? results.length : 6);
 
-  const intelligenceStats = useMemo(() => {
-    const analyses = feedPosts.map((post) => analyzeIncident(post.message, Boolean(post.image)));
-    const actionable = analyses.filter((analysis) => analysis.category !== "Community");
-    const high = analyses.filter((analysis) => analysis.severity === "High").length;
-    const riskScore = analyses.length
-      ? Math.min(96, Math.round(analyses.reduce((sum, analysis) => sum + analysis.trust + analysis.panic, 0) / analyses.length / 2 + high * 8))
-      : 42;
-    const hotspots = new Set(feedPosts.map((post) => post.area.trim().toLowerCase()).filter(Boolean));
+  const submitSearch = (value = query) => {
+    shouldScrollToResults.current = true;
+    setSubmittedQuery(value.trim());
+    setSubmittedLocation(location.trim() || "Cape Town, South Africa");
+  };
 
-    return [
-      { label: "Community risk score", value: String(riskScore), detail: high ? `${high} high priority` : "stable", icon: Gauge },
-      { label: "Active alerts", value: String(actionable.length), detail: `${high} high priority`, icon: Bell },
-      { label: "AI summaries", value: String(analyses.length), detail: "from feed posts", icon: BrainCircuit },
-      { label: "Hotspots tracked", value: String(hotspots.size), detail: "community areas", icon: Crosshair },
-    ];
-  }, [feedPosts]);
+  const selectFilter = (nextFilter: Filter) => {
+    shouldScrollToResults.current = true;
+    setFilter(nextFilter);
+  };
 
-  const dashboardIncidents = useMemo<DashboardIncident[]>(() => {
-    return feedPosts
-      .map((post) => {
-        const analysis = analyzeIncident(post.message, Boolean(post.image));
-        if (analysis.category === "Community") return null;
-        return {
-          type: analysis.category as IncidentType,
-          severity: analysis.severity,
-          source: post.image ? "Community report + image" : "Community report",
-          area: post.area || "Unspecified area",
-          summary: analysis.summary,
-          action: analysis.action,
-          trust: analysis.trust,
-          time: relativeTime(post.createdAt),
-        };
-      })
-      .filter((incident): incident is DashboardIncident => Boolean(incident))
-      .sort((a, b) => severityRank[b.severity] - severityRank[a.severity] || b.trust - a.trust)
-      .slice(0, 3);
-  }, [feedPosts]);
-
-  const hotspotRows = useMemo<HotspotRow[]>(() => {
-    const groups = new Map<string, { count: number; score: number; categories: Record<string, number>; lat: number; lng: number; coordsCount: number }>();
-    for (const post of feedPosts) {
-      const area = post.area.trim() || "Unspecified area";
-      const analysis = analyzeIncident(post.message, Boolean(post.image));
-      const current = groups.get(area) ?? { count: 0, score: 0, categories: {}, lat: 0, lng: 0, coordsCount: 0 };
-      current.count += 1;
-      current.score += analysis.trust + analysis.panic + severityRank[analysis.severity] * 10;
-      current.categories[analysis.category] = (current.categories[analysis.category] ?? 0) + 1;
-      if (post.coords) {
-        current.lat += post.coords.lat;
-        current.lng += post.coords.lng;
-        current.coordsCount += 1;
-      }
-      groups.set(area, current);
-    }
-
-    return [...groups.entries()]
-      .map(([area, group]) => {
-        const issue = Object.entries(group.categories).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "Community";
-        const type = issue === "Community" ? "Infrastructure" : (issue as IncidentType);
-        return {
-          area,
-          issue,
-          level: Math.min(100, Math.round(group.score / group.count / 2)),
-          icon: incidentTypeMeta[type].icon,
-          coords: group.coordsCount ? { lat: group.lat / group.coordsCount, lng: group.lng / group.coordsCount } : undefined,
-          ...positionForArea(area, group.coordsCount ? { lat: group.lat / group.coordsCount, lng: group.lng / group.coordsCount } : undefined),
-        };
-      })
-      .sort((a, b) => b.level - a.level)
-      .slice(0, 5);
-  }, [feedPosts]);
-
-  const topIncident = dashboardIncidents[0];
-
-  const loadNearbyPlaces = (useBrowserLocation = true) => {
-    setPlacesLoading(true);
-    setPlacesError(null);
-
-    const fetchPlaces = async (origin: { lat: number; lng: number }) => {
-      setMapOrigin(origin);
-      const query = `
-        [out:json][timeout:20];
-        (
-          node(around:1800,${origin.lat},${origin.lng})[amenity];
-          node(around:1800,${origin.lat},${origin.lng})[shop];
-          node(around:1800,${origin.lat},${origin.lng})[tourism];
-          node(around:1800,${origin.lat},${origin.lng})[leisure];
-        );
-        out center 24;
-      `;
-      const response = await fetch("https://overpass-api.de/api/interpreter", {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=UTF-8" },
-        body: query,
-      });
-      if (!response.ok) throw new Error("Nearby places could not load.");
-      const data = (await response.json()) as {
-        elements?: Array<{ id: number; lat?: number; lon?: number; tags?: Record<string, string> }>;
-      };
-      const places = (data.elements ?? [])
-        .map((item) => {
-          const lat = item.lat;
-          const lng = item.lon;
-          const tags = item.tags ?? {};
-          const name = tags.name;
-          if (!name || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-          const point = { lat: lat!, lng: lng! };
-          return {
-            id: String(item.id),
-            name,
-            type: placeType(tags).replace(/_/g, " "),
-            lat: point.lat,
-            lng: point.lng,
-            distance: distanceKm(origin, point),
-          };
-        })
-        .filter((place): place is NearbyPlace => Boolean(place))
-        .sort((a, b) => a.distance - b.distance)
-        .slice(0, 10);
-      setNearbyPlaces(places);
-    };
-
-    const fallbackCapeTown = () => {
-      fetchPlaces({ lat: -33.9249, lng: 18.4241 })
-        .catch((error) => setPlacesError(error instanceof Error ? error.message : "Nearby places could not load."))
-        .finally(() => setPlacesLoading(false));
-    };
-
-    if (!useBrowserLocation || !navigator.geolocation) {
-      fallbackCapeTown();
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        fetchPlaces({
-          lat: Number(position.coords.latitude.toFixed(5)),
-          lng: Number(position.coords.longitude.toFixed(5)),
-        })
-          .catch((error) => setPlacesError(error instanceof Error ? error.message : "Nearby places could not load."))
-          .finally(() => setPlacesLoading(false));
-      },
-      () => fallbackCapeTown(),
-      { enableHighAccuracy: true, timeout: 8000 },
-    );
+  const resetSearch = () => {
+    setQuery("");
+    setSubmittedQuery("");
+    setSubmittedLocation("Cape Town, South Africa");
+    setLocation("Cape Town, South Africa");
+    setFilter("all");
   };
 
   useEffect(() => {
-    loadNearbyPlaces(false);
-  }, []);
+    if (!shouldScrollToResults.current) return;
+    shouldScrollToResults.current = false;
+    resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [submittedQuery, filter]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadResources() {
+      setResourcesLoading(true);
+      setResourcesError(null);
+      try {
+        const params = new URLSearchParams({
+          query: submittedQuery,
+          location: submittedLocation,
+          type: filter,
+        });
+        const response = await fetch(`/api/resources?${params.toString()}`);
+        const data = (await response.json().catch(() => ({}))) as {
+          results?: Resource[];
+          origin?: string;
+          error?: string;
+        };
+        if (!response.ok) throw new Error(data.error ?? "Live resources could not load");
+        if (cancelled) return;
+        setRemoteResources(data.results ?? []);
+        setResourceOrigin(data.origin ?? submittedLocation);
+      } catch (error) {
+        if (!cancelled) {
+          setRemoteResources([]);
+          setResourcesError(error instanceof Error ? error.message : "Live resources could not load");
+          setResourceOrigin(submittedLocation);
+        }
+      } finally {
+        if (!cancelled) setResourcesLoading(false);
+      }
+    }
+
+    void loadResources();
+    return () => {
+      cancelled = true;
+    };
+  }, [filter, submittedLocation, submittedQuery]);
 
   return (
-    <div className="px-4 md:px-10 py-8 md:py-10 max-w-7xl mx-auto">
-      <section
-        className="relative min-h-[430px] overflow-hidden rounded-3xl mb-8 p-6 md:p-10 text-white shadow-elegant flex items-end"
-        style={{
-          backgroundImage:
-            "linear-gradient(90deg, rgba(8,16,32,0.88), rgba(8,16,32,0.58), rgba(8,16,32,0.22)), url('https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=1800&q=80')",
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-        }}
-      >
-        <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-black/45 to-transparent" />
-        <div className="relative grid lg:grid-cols-[1fr_360px] gap-8 w-full items-end">
-          <div className="max-w-3xl">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 backdrop-blur-sm border border-white/20 text-xs font-medium">
-              <Sparkles className="h-3 w-3" /> AI-powered community operations center
-            </span>
-            <h1 className="font-display text-4xl md:text-6xl font-bold tracking-tight mt-4 leading-[1.02]">
-              Community crisis intelligence, resources, and action in one place.
+    <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-8">
+      <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-stretch">
+        <div
+          className="relative overflow-hidden rounded-2xl border border-border bg-slate-950 p-6 text-white shadow-elegant md:p-8"
+          style={{
+            backgroundImage:
+              "linear-gradient(90deg, rgba(8,16,32,0.92), rgba(8,16,32,0.76), rgba(8,16,32,0.36)), url('https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=1800&q=80')",
+            backgroundPosition: "center",
+            backgroundSize: "cover",
+          }}
+        >
+          <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/35 to-transparent" />
+          <div className="relative">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/15 px-3 py-1 text-xs font-semibold text-white backdrop-blur-sm">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Local help, made easier to find
+            </div>
+            <h1 className="mt-4 max-w-2xl font-display text-3xl font-bold leading-tight tracking-tight md:text-5xl">
+              Find resources available to your community.
             </h1>
-            <p className="text-white/88 mt-4 md:text-lg max-w-2xl">
-              Detect urgent reports, summarize incidents, find nearby help, and keep residents informed during outages, fires, crime alerts, clinic shortages, floods, and road closures.
+            <p className="mt-4 max-w-2xl text-base leading-relaxed text-white/85 md:text-lg">
+              Community Compass brings clinics, NGOs, public alerts, emergency contacts, and practical support into one clear place, so residents can find help without sorting through noise.
             </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Link
-                to="/feed"
-                preload="intent"
-                className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-white/90"
-              >
-                <Newspaper className="h-4 w-4" /> Report an incident
-              </Link>
-              <Link
-                to="/emergency"
-                preload="intent"
-                className="inline-flex items-center gap-2 rounded-xl bg-white/15 px-4 py-2.5 text-sm font-semibold text-white border border-white/25 backdrop-blur-sm hover:bg-white/25"
-              >
-                <Siren className="h-4 w-4" /> Emergency contacts
-              </Link>
-            </div>
-          </div>
-          <div className="rounded-2xl border border-white/20 bg-black/30 backdrop-blur-md p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-xs uppercase tracking-wide text-white/65">Live priority</div>
-                <div className="font-display text-xl font-semibold mt-1">{topIncident ? `${topIncident.type} report` : "No active reports yet"}</div>
-              </div>
-              {topIncident && <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${severityMeta[topIncident.severity]}`}>{topIncident.severity}</span>}
-            </div>
-            <p className="mt-3 text-sm text-white/82">
-              {topIncident ? `${topIncident.summary} ${topIncident.action}` : "Reports from the community feed will appear here once residents submit location-based updates."}
-            </p>
-            <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-              <MiniMetric value={topIncident ? `${topIncident.trust}%` : "0"} label="trust" />
-              <MiniMetric value={topIncident ? topIncident.time : "none"} label="latest" />
-              <MiniMetric value={String(hotspotRows.length)} label="areas" />
-            </div>
-          </div>
-        </div>
-      </section>
 
-      <section className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
-        {intelligenceStats.map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <div key={stat.label} className="bg-card border border-border rounded-2xl p-5 shadow-card">
-              <div className="flex items-center justify-between gap-3">
-                <span className="h-10 w-10 grid place-items-center rounded-xl bg-primary/10 text-primary">
-                  <Icon className="h-5 w-5" />
-                </span>
-                <span className="text-xs text-muted-foreground">{stat.detail}</span>
-              </div>
-              <div className="mt-4 text-3xl font-bold tracking-tight tabular-nums">{stat.value}</div>
-              <div className="text-sm text-muted-foreground">{stat.label}</div>
-            </div>
-          );
-        })}
-      </section>
-
-      <section className="grid xl:grid-cols-[1.35fr_0.65fr] gap-6 mb-8">
-        <div className="bg-card border border-border rounded-2xl p-5 shadow-card">
-          <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
-            <div>
-              <h2 className="font-display text-xl md:text-2xl font-bold tracking-tight">AI incident intelligence</h2>
-              <p className="text-sm text-muted-foreground mt-1">Classified by urgency, trust level, and recommended action.</p>
-            </div>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-3 py-1 text-xs font-semibold text-[color:var(--success)]">
-              <Activity className="h-3.5 w-3.5" /> Live model-ready flow
-            </span>
-          </div>
-          <div className="space-y-3">
-            {dashboardIncidents.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border bg-background/55 p-6 text-center text-sm text-muted-foreground">
-                No feed incidents yet. Ask residents to submit location-based reports from the Community Feed.
-              </div>
-            ) : dashboardIncidents.map((incident) => {
-              const meta = incidentTypeMeta[incident.type];
-              const Icon = meta.icon;
-              return (
-                <article key={`${incident.area}-${incident.time}`} className="rounded-xl border border-border bg-background/55 p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="flex items-start gap-3 min-w-0">
-                      <span className={`h-10 w-10 shrink-0 grid place-items-center rounded-xl ${meta.cls}`}>
-                        <Icon className="h-5 w-5" />
-                      </span>
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="font-display font-semibold">{incident.type}</h3>
-                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${severityMeta[incident.severity]}`}>
-                            {incident.severity}
-                          </span>
-                        </div>
-                        <div className="mt-1 text-xs text-muted-foreground flex flex-wrap items-center gap-2">
-                          <span className="inline-flex items-center gap-1">
-                            <MapPin className="h-3.5 w-3.5" /> {incident.area}
-                          </span>
-                          <span>{incident.time}</span>
-                          <span>{incident.trust}% trust</span>
-                        </div>
-                      </div>
-                    </div>
-                    <span className="text-xs text-muted-foreground">{incident.source}</span>
-                  </div>
-                  <p className="mt-3 text-sm leading-relaxed">{incident.summary}</p>
-                  <div className="mt-3 rounded-lg bg-secondary/60 px-3 py-2 text-sm">
-                    <span className="font-semibold">Recommended action:</span> {incident.action}
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="bg-card border border-border rounded-2xl p-5 shadow-card">
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <div>
-              <h2 className="font-display text-xl font-bold tracking-tight">Cape Town nearby map</h2>
-              <p className="text-sm text-muted-foreground mt-1">Places around your location and active risk clusters.</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => loadNearbyPlaces(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-secondary px-3 py-2 text-xs font-semibold text-secondary-foreground hover:bg-muted"
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                submitSearch();
+              }}
+              className="mt-6 rounded-xl border border-white/20 bg-white/15 p-2 shadow-card backdrop-blur-md"
             >
-              <LocateFixed className="h-3.5 w-3.5" /> Near me
-            </button>
-          </div>
-          <div className="relative h-52 w-full overflow-hidden rounded-xl border border-border bg-secondary">
-            <NearbyLeafletMap origin={mapOrigin} nearbyPlaces={nearbyPlaces} hotspotRows={hotspotRows} placesLoading={placesLoading} />
-            {!placesLoading && nearbyPlaces.length === 0 && hotspotRows.length === 0 && (
-              <div className="pointer-events-none absolute inset-0 z-[1000] grid place-items-center px-6 text-center text-sm text-muted-foreground">
-                Nearby places load from Cape Town by default. Use Near me to center on your location.
-              </div>
-            )}
-          </div>
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-primary" /> map center</span>
-            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> nearby place</span>
-            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-red-500" /> hotspot</span>
-          </div>
-          {placesError && <div className="mt-3 rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs text-destructive">{placesError}</div>}
-          {nearbyPlaces.length > 0 && (
-            <div className="mt-4 space-y-2">
-              {nearbyPlaces.slice(0, 5).map((place) => (
-                <div key={place.id} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background/60 px-3 py-2 text-sm">
-                  <span className="inline-flex min-w-0 items-center gap-2">
-                    <MapPin className="h-3.5 w-3.5 shrink-0 text-primary" />
-                    <span className="truncate font-medium">{place.name}</span>
-                  </span>
-                  <span className="shrink-0 text-xs text-muted-foreground">{place.type} · {place.distance.toFixed(1)} km</span>
+              <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(180px,0.7fr)_auto]">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                  <input
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Search for clinics, food, youth support, outages..."
+                    className="h-11 w-full rounded-lg border border-transparent bg-white pl-9 pr-3 text-sm text-slate-950 outline-none placeholder:text-slate-500 focus:border-primary/40 focus:ring-2 focus:ring-white/80"
+                  />
                 </div>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                  <input
+                    value={location}
+                    onChange={(event) => setLocation(event.target.value)}
+                    placeholder="Area or city"
+                    className="h-11 w-full rounded-lg border border-transparent bg-white pl-9 pr-3 text-sm text-slate-950 outline-none placeholder:text-slate-500 focus:border-primary/40 focus:ring-2 focus:ring-white/80"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-white px-4 text-sm font-semibold text-slate-950 hover:bg-white/90"
+                >
+                  <Search className="h-4 w-4" />
+                  Find help
+                </button>
+              </div>
+            </form>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              {examples.map((example) => (
+                <button
+                  key={example}
+                  type="button"
+                  disabled={query === example && submittedQuery === example}
+                  onClick={() => {
+                    setQuery(example);
+                    submitSearch(example);
+                  }}
+                  className="rounded-full border border-white/15 bg-white/15 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm hover:bg-white/25 disabled:cursor-default disabled:bg-white/30"
+                >
+                  {example}
+                </button>
               ))}
             </div>
-          )}
-          <div className="mt-4 space-y-3">
-            {hotspotRows.map((row) => {
-              const Icon = row.icon;
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-card md:p-6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h2 className="font-display text-xl font-bold tracking-tight">What you can find</h2>
+              <p className="mt-1 text-sm text-muted-foreground">Start broad, then narrow down when you know what you need.</p>
+            </div>
+            <UsersRound className="h-5 w-5 text-primary" />
+          </div>
+          <div className="mt-5 grid gap-3">
+            {categoryCards.map((category) => {
+              const Icon = category.icon;
+              const active = filter === category.type;
               return (
-                <div key={row.area}>
-                  <div className="flex items-center justify-between gap-3 text-sm">
-                    <span className="inline-flex items-center gap-2 font-medium">
-                      <Icon className="h-4 w-4 text-primary" /> {row.area}
+                <button
+                  key={category.type}
+                  type="button"
+                  disabled={active}
+                  onClick={() => selectFilter(category.type)}
+                  className={`flex items-center gap-3 rounded-xl border p-3 text-left transition-colors ${
+                    active
+                      ? "cursor-default border-primary/35 bg-primary/10"
+                      : "border-border bg-background/55 hover:bg-secondary"
+                  }`}
+                >
+                  <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg ${category.className}`}>
+                    <Icon className="h-5 w-5" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center justify-between gap-3">
+                      <span className="font-semibold">{category.label}</span>
+                      <span className="text-xs font-medium text-muted-foreground">{counts[category.type]}</span>
                     </span>
-                    <span className="text-xs text-muted-foreground">{row.issue}</span>
-                  </div>
-                  <div className="mt-1 h-2 rounded-full bg-secondary overflow-hidden">
-                    <div className="h-full rounded-full bg-primary" style={{ width: `${row.level}%` }} />
-                  </div>
-                </div>
+                    <span className="mt-0.5 block text-sm text-muted-foreground">{category.description}</span>
+                  </span>
+                </button>
               );
             })}
           </div>
         </div>
       </section>
 
-      <section className="mb-8">
-        <div className="flex items-end justify-between gap-4 mb-3">
+      <section className="mt-6 grid gap-3 md:grid-cols-3">
+        <InfoTile value="1" label="Search what you need" />
+        <InfoTile value="2" label="Choose a trusted local option" />
+        <InfoTile value="3" label="Call, visit, or share it with your community" />
+      </section>
+
+      <section ref={resultsRef} className="mt-8 scroll-mt-24">
+        <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="font-display text-xl md:text-2xl font-bold tracking-tight">{t("resources.pages")}</h2>
-            <p className="text-sm text-muted-foreground mt-1">{t("resources.pagesSub")}</p>
+            <h2 className="font-display text-2xl font-bold tracking-tight">
+              {hasSearch ? "Matching resources" : "Available resources"}
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {resourcesLoading
+                ? "Finding live resources from OpenStreetMap..."
+                : hasSearch
+                  ? `${results.length} result${results.length === 1 ? "" : "s"} found near ${resourceOrigin}.`
+                  : `Live OpenStreetMap resources near ${resourceOrigin}, with local saved resources as fallback.`}
+            </p>
+            {resourcesError && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Live lookup unavailable: {resourcesError}. Showing saved Community Compass resources.
+              </p>
+            )}
           </div>
+          {hasSearch && (
+            <button
+              type="button"
+              onClick={resetSearch}
+              className="rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-secondary"
+            >
+              Clear search
+            </button>
+          )}
         </div>
-        <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {resourcePages.map((page) => {
-            const Icon = page.icon;
+
+        {featured.length === 0 ? (
+          <div className="mt-4 rounded-xl border border-dashed border-border bg-card p-8 text-center">
+            <h3 className="font-display text-lg font-semibold">No resources found</h3>
+            <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+              Try a broader word like health, food, shelter, youth, outage, or clinic.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {featured.map((resource) => (
+              <ResourceCard key={resource.id} r={resource} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="mt-10">
+        <div className="mb-3">
+          <h2 className="font-display text-xl font-bold tracking-tight">More community tools</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t("resources.pagesSub")}</p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          {nextActions.map((action) => {
+            const Icon = action.icon;
             return (
               <Link
-                key={page.to}
-                to={page.to}
+                key={action.to}
+                to={action.to}
                 preload="intent"
-                className="group bg-card text-card-foreground rounded-2xl border border-border p-5 hover:shadow-elegant hover:-translate-y-0.5 hover:border-primary/30 transition-all"
+                className="group rounded-xl border border-border bg-card p-4 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-elegant"
               >
                 <div className="flex items-start justify-between gap-3">
-                  <span className={`h-11 w-11 grid place-items-center rounded-xl ${page.cls}`}>
+                  <span className="grid h-10 w-10 place-items-center rounded-lg bg-primary/10 text-primary">
                     <Icon className="h-5 w-5" />
                   </span>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+                  <ArrowRight className="h-4 w-4 text-muted-foreground transition-all group-hover:translate-x-0.5 group-hover:text-primary" />
                 </div>
-                <h3 className="font-display font-semibold text-base mt-4 group-hover:text-primary transition-colors">{t(page.titleKey)}</h3>
-                <p className="text-sm text-muted-foreground mt-1 leading-relaxed">{t(page.descriptionKey)}</p>
+                <h3 className="mt-4 font-display font-semibold group-hover:text-primary">{action.title}</h3>
+                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{action.description}</p>
               </Link>
             );
           })}
         </div>
       </section>
-
     </div>
   );
 }
 
-function MiniMetric({ value, label }: { value: string; label: string }) {
+function InfoTile({ value, label }: { value: string; label: string }) {
   return (
-    <div className="rounded-xl bg-white/10 border border-white/10 px-3 py-2">
-      <div className="font-display text-lg font-bold">{value}</div>
-      <div className="text-[10px] uppercase tracking-wide text-white/60">{label}</div>
+    <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 shadow-card">
+      <div className="grid h-9 w-9 place-items-center rounded-lg bg-secondary font-display text-sm font-bold text-primary">
+        {value}
+      </div>
+      <div className="text-sm font-medium">{label}</div>
     </div>
   );
 }

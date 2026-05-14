@@ -79,8 +79,8 @@ const dict = {
     "cart.send": "Send",
     "cart.clear": "Clear cart",
     "cart.back": "Back to compare",
-    "cart.emailSubject": "My CommunityHub grocery cart",
-    "cart.emailIntro": "Here is your saved grocery cart from CommunityHub:",
+    "cart.emailSubject": "My Community Compass grocery cart",
+    "cart.emailIntro": "Here is your saved grocery cart from Community Compass:",
   },
   xh: {
     "nav.resources": "Izixhobo",
@@ -156,8 +156,8 @@ const dict = {
     "cart.send": "Thumela",
     "cart.clear": "Cima inqwelo",
     "cart.back": "Buyela",
-    "cart.emailSubject": "Inqwelo yam yeegrosa kwiCommunityHub",
-    "cart.emailIntro": "Nantsi inqwelo yakho yeegrosa egciniweyo evela kwiCommunityHub:",
+    "cart.emailSubject": "Inqwelo yam yeegrosa kwiCommunity Compass",
+    "cart.emailIntro": "Nantsi inqwelo yakho yeegrosa egciniweyo evela kwiCommunity Compass:",
   },
   zu: {
     "nav.resources": "Izinsiza",
@@ -219,8 +219,8 @@ const dict = {
     "cart.send": "Thumela",
     "cart.clear": "Sula inqola",
     "cart.back": "Buyela ekuqhathaniseni",
-    "cart.emailSubject": "Inqola yami yokudla ye-CommunityHub",
-    "cart.emailIntro": "Nalu uhlu lwakho lokudla olugciniwe oluvela ku-CommunityHub:",
+    "cart.emailSubject": "Inqola yami yokudla ye-Community Compass",
+    "cart.emailIntro": "Nalu uhlu lwakho lokudla olugciniwe oluvela ku-Community Compass:",
     "feed.title": "Okuphakelayo Komphakathi",
     "feed.subtitle": "Yabelana ngezibuyekezo, izicelo, ama-screenshot, nokunqoba kwasendaweni.",
     "feed.compose": "Thumela emphakathini wakho",
@@ -310,8 +310,8 @@ const dict = {
     "cart.send": "Stuur",
     "cart.clear": "Maak mandjie skoon",
     "cart.back": "Terug",
-    "cart.emailSubject": "My CommunityHub kruideniersmandjie",
-    "cart.emailIntro": "Hier is jou gestoorde kruideniersmandjie van CommunityHub:",
+    "cart.emailSubject": "My Community Compass kruideniersmandjie",
+    "cart.emailIntro": "Hier is jou gestoorde kruideniersmandjie van Community Compass:",
   },
 } as const;
 

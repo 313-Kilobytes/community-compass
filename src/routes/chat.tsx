@@ -5,8 +5,8 @@ import { Bot, ExternalLink, Loader2 } from "lucide-react";
 export const Route = createFileRoute("/chat")({
   head: () => ({
     meta: [
-      { title: "Assistant - CommunityHub" },
-      { name: "description", content: "Chat with the CommunityHub assistant." },
+      { title: "Assistant - Community Compass" },
+      { name: "description", content: "Chat with the Community Compass assistant." },
     ],
   }),
   component: ChatPage,
@@ -94,7 +94,7 @@ function ChatPage() {
             target: chatTargetRef.current,
           },
           assistant: {
-            title: "CommunityHub Assistant",
+            title: "Community Compass Assistant",
             description: "Ask about clinics, NGOs, alerts, and local support.",
             color: "#7C3AED",
             persistence: "localStorage",
@@ -128,7 +128,7 @@ function ChatPage() {
         </div>
         <h1 className="mt-4 text-2xl font-bold tracking-tight md:text-3xl">Community Assistant</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Chat with the CommunityHub Voiceflow assistant for local resource guidance.
+          Chat with the Community Compass Voiceflow assistant for local resource guidance.
         </p>
       </header>
 
