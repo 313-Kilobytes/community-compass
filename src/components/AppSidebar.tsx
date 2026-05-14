@@ -1,8 +1,9 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
-  LayoutGrid,
   BarChart3,
   Compass,
+  LayoutGrid,
+  Menu,
   Siren,
   ShoppingBasket,
   Newspaper,
@@ -12,6 +13,13 @@ import {
 } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 
 const items = [
   { title: "nav.resources" as const, url: "/", icon: LayoutGrid },
@@ -24,15 +32,53 @@ const items = [
 ];
 
 const adminItem = { title: "nav.admin" as const, url: "/admin", icon: ShieldCheck };
+type SidebarItem = (typeof items)[number] | typeof adminItem;
 
 export function AppSidebar() {
+  return null;
+}
+
+export function MenuNav() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { t } = useT();
   const { user } = useAuth();
   const visibleItems = user?.role === "super_admin" ? [...items, adminItem] : items;
 
   return (
-    <aside className="relative hidden w-64 shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
+    <Sheet>
+      <SheetTrigger asChild>
+        <button
+          type="button"
+          className="fixed left-3 top-3 z-50 grid h-11 w-11 place-items-center rounded-xl border border-border bg-card text-foreground shadow-card"
+          aria-label="Open navigation menu"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+      </SheetTrigger>
+      <SheetContent
+        side="left"
+        className="w-[min(88vw,340px)] overflow-hidden border-sidebar-border bg-sidebar p-0 text-sidebar-foreground [&>button]:right-3 [&>button]:top-3 [&>button]:grid [&>button]:h-10 [&>button]:w-10 [&>button]:place-items-center [&>button]:rounded-xl [&>button]:bg-sidebar-accent [&>button]:text-sidebar-foreground [&>button]:opacity-100 [&>button]:shadow-card [&>button:hover]:bg-sidebar-primary/15"
+      >
+        <SheetTitle className="sr-only">Navigation</SheetTitle>
+        <SidebarContent pathname={pathname} visibleItems={visibleItems} t={t} closeOnNavigate />
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function SidebarContent({
+  pathname,
+  visibleItems,
+  t,
+  closeOnNavigate = false,
+}: {
+  pathname: string;
+  visibleItems: SidebarItem[];
+  t: (key: SidebarItem["title"]) => string;
+  closeOnNavigate?: boolean;
+}) {
+  return (
+    <>
       <div
         className="absolute inset-0 opacity-40 pointer-events-none"
         style={{
@@ -56,7 +102,7 @@ export function AppSidebar() {
       <nav className="relative flex-1 p-3 space-y-1">
         {visibleItems.map((it) => {
           const active = pathname === it.url;
-          return (
+          const link = (
             <Link
               key={it.url}
               to={it.url}
@@ -78,36 +124,16 @@ export function AppSidebar() {
               <span className="font-medium">{t(it.title)}</span>
             </Link>
           );
+          return closeOnNavigate ? (
+            <SheetClose key={it.url} asChild>
+              {link}
+            </SheetClose>
+          ) : (
+            link
+          );
         })}
       </nav>
-    </aside>
-  );
-}
-
-export function MobileNav() {
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const { t } = useT();
-  const { user } = useAuth();
-  const visibleItems = user?.role === "super_admin" ? [...items, adminItem] : items;
-
-  return (
-    <nav className="md:hidden fixed bottom-3 inset-x-3 glass border border-border rounded-2xl shadow-elegant flex gap-1 overflow-x-auto py-2 px-2 z-50">
-      {visibleItems.map((it) => {
-        const active = pathname === it.url;
-        return (
-          <Link
-            key={it.url}
-            to={it.url}
-            className={`flex min-w-16 flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-[11px] transition-colors ${
-              active ? "bg-primary/10 text-primary" : "text-muted-foreground"
-            }`}
-          >
-            <it.icon className="h-5 w-5" />
-            {t(it.title)}
-          </Link>
-        );
-      })}
-    </nav>
+    </>
   );
 }
 

@@ -202,7 +202,7 @@ function ResourcesPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-8">
-      <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-stretch">
+      <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr] xl:items-stretch">
         <div
           className="relative overflow-hidden rounded-2xl border border-border bg-slate-950 p-6 text-white shadow-elegant md:p-8"
           style={{
@@ -230,38 +230,46 @@ function ResourcesPage() {
                 event.preventDefault();
                 submitSearch();
               }}
-              className="mt-6 rounded-xl border border-white/20 bg-white/15 p-2 shadow-card backdrop-blur-md"
+              className="mt-6 rounded-2xl border border-white/20 bg-white/15 p-4 shadow-card backdrop-blur-md"
             >
-              <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(180px,0.7fr)_auto]">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                  <input
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Search for clinics, food, youth support, outages..."
-                    className="h-11 w-full rounded-lg border border-transparent bg-white pl-9 pr-3 text-sm text-slate-950 outline-none placeholder:text-slate-500 focus:border-primary/40 focus:ring-2 focus:ring-white/80"
-                  />
+              <div className="grid gap-4">
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-white/75">What do you need?</span>
+                  <span className="relative block">
+                    <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                    <input
+                      value={query}
+                      onChange={(event) => setQuery(event.target.value)}
+                      placeholder="Clinics, food, youth support, outages..."
+                      className="h-13 min-h-13 w-full rounded-xl border border-transparent bg-white pl-11 pr-4 text-base text-slate-950 outline-none placeholder:text-slate-500 focus:border-primary/40 focus:ring-2 focus:ring-white/80"
+                    />
+                  </span>
+                </label>
+                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_160px]">
+                  <label className="block min-w-0">
+                    <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-white/75">Near</span>
+                    <span className="relative block">
+                      <MapPin className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                      <input
+                        value={location}
+                        onChange={(event) => setLocation(event.target.value)}
+                        placeholder="Area or city"
+                        className="h-13 min-h-13 w-full rounded-xl border border-transparent bg-white pl-11 pr-4 text-base text-slate-950 outline-none placeholder:text-slate-500 focus:border-primary/40 focus:ring-2 focus:ring-white/80"
+                      />
+                    </span>
+                  </label>
+                  <button
+                    type="submit"
+                    className="inline-flex min-h-13 w-full items-center justify-center gap-2 self-end rounded-xl bg-white px-5 text-sm font-semibold text-slate-950 hover:bg-white/90"
+                  >
+                    <Search className="h-4 w-4" />
+                    Find help
+                  </button>
                 </div>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                  <input
-                    value={location}
-                    onChange={(event) => setLocation(event.target.value)}
-                    placeholder="Area or city"
-                    className="h-11 w-full rounded-lg border border-transparent bg-white pl-9 pr-3 text-sm text-slate-950 outline-none placeholder:text-slate-500 focus:border-primary/40 focus:ring-2 focus:ring-white/80"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-white px-4 text-sm font-semibold text-slate-950 hover:bg-white/90"
-                >
-                  <Search className="h-4 w-4" />
-                  Find help
-                </button>
               </div>
             </form>
 
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-4 flex flex-wrap gap-2">
               {examples.map((example) => (
                 <button
                   key={example}
