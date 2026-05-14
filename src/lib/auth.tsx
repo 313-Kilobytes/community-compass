@@ -47,6 +47,7 @@ type AuthContextValue = {
   error: string | null;
   signup: (input: AuthInput) => Promise<boolean>;
   login: (email: string, password: string) => Promise<boolean>;
+  resetPassword: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
   updateProfile: (patch: ProfilePatch) => Promise<boolean>;
@@ -208,6 +209,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const resetPassword = async (email: string, password: string) => {
+    setError(null);
+    try {
+      const response = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ identifier: email, password }),
+      });
+      const data = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(data.error || "Password reset failed.");
+      return true;
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Password reset failed.");
+      return false;
+    }
+  };
+
   const logout = async () => {
     setError(null);
     try {
@@ -262,6 +281,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       error,
       signup,
       login,
+      resetPassword,
       logout,
       refresh,
       updateProfile,

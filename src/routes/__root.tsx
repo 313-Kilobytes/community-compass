@@ -90,8 +90,8 @@ function RootComponent() {
           <CartProvider>
             <div className="flex min-h-screen w-full bg-background">
               <AppSidebar />
-              <main className="flex-1 min-w-0 pb-20 md:pb-0 relative">
-                <div className="absolute top-3 right-3 md:top-5 md:right-6 z-40 flex items-center gap-2">
+              <main className="flex-1 min-w-0 pb-20 md:pb-0">
+                <div className="relative z-40 flex min-h-16 flex-wrap items-center justify-end gap-2 px-3 pt-3 md:min-h-20 md:px-6 md:pt-5">
                   <AuthControls />
                   <ThemeToggle />
                   <LanguageSwitcher />

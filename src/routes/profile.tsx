@@ -1,9 +1,10 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { Camera, Mail, MapPin, Save, ShieldCheck, UserRound } from "lucide-react";
+import { Camera, Info, LifeBuoy, Mail, MapPin, Save, ShieldCheck, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { LocationPicker } from "@/components/LocationPicker";
 import { useAuth, type UserLocation } from "@/lib/auth";
 import { detectCapeTownRegion } from "@/lib/community";
+import type { AdminTicket, TicketPriority } from "@/lib/server/admin-store";
 
 export const Route = createFileRoute("/profile")({
   head: () => ({
@@ -82,6 +83,14 @@ function ProfileEditor() {
   const [currentLocation, setCurrentLocation] = useState<UserLocation | null>(user?.currentLocation ?? null);
   const [currentLocationQuery, setCurrentLocationQuery] = useState(user?.currentLocation?.label ?? "");
   const [profilePicture, setProfilePicture] = useState(user?.profilePicture ?? "");
+  const [tickets, setTickets] = useState<AdminTicket[]>([]);
+  const [ticketSubject, setTicketSubject] = useState("");
+  const [ticketCategory, setTicketCategory] = useState<AdminTicket["category"]>("Bug");
+  const [ticketPriority, setTicketPriority] = useState<TicketPriority>("Medium");
+  const [ticketMessage, setTicketMessage] = useState("");
+  const [ticketNotice, setTicketNotice] = useState<string | null>(null);
+  const [expandedTicket, setExpandedTicket] = useState<string | null>(null);
+  const [showTickets, setShowTickets] = useState(false);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -92,6 +101,16 @@ function ProfileEditor() {
     setCurrentLocationQuery(user?.currentLocation?.label ?? "");
     setProfilePicture(user?.profilePicture ?? "");
   }, [user]);
+
+  useEffect(() => {
+    const loadTickets = async () => {
+      const response = await fetch("/api/tickets", { credentials: "include" }).catch(() => null);
+      if (!response?.ok) return;
+      const data = (await response.json().catch(() => ({}))) as { tickets?: AdminTicket[] };
+      setTickets(data.tickets ?? []);
+    };
+    void loadTickets();
+  }, []);
 
   if (!user) return null;
 
@@ -115,8 +134,28 @@ function ProfileEditor() {
     reader.readAsDataURL(file);
   };
 
+  const submitTicket = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setTicketNotice(null);
+    const response = await fetch("/api/tickets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ subject: ticketSubject, category: ticketCategory, priority: ticketPriority, message: ticketMessage }),
+    }).catch(() => null);
+    const result = (await response?.json().catch(() => ({}))) as { ticket?: AdminTicket; error?: string };
+    if (!response?.ok || !result.ticket) {
+      setTicketNotice(result.error || "Unable to submit ticket.");
+      return;
+    }
+    setTickets((current) => [result.ticket!, ...current]);
+    setTicketSubject("");
+    setTicketMessage("");
+    setTicketNotice("Ticket submitted. Admins can now track and respond to it.");
+  };
+
   return (
-    <form onSubmit={submit} className="grid gap-5 lg:grid-cols-[320px_1fr]">
+    <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
       <section className="rounded-2xl border border-border bg-card p-5 shadow-card">
         <div className="mx-auto h-32 w-32 overflow-hidden rounded-full border border-border bg-secondary">
           {profilePicture ? (
@@ -133,7 +172,7 @@ function ProfileEditor() {
         </label>
       </section>
 
-      <section className="rounded-2xl border border-border bg-card p-5 shadow-card">
+      <form onSubmit={submit} className="rounded-2xl border border-border bg-card p-5 shadow-card">
         <div className="grid gap-4 md:grid-cols-2">
           <TextInput value={username} onChange={setUsername} label="Username" autoComplete="username" required />
           <TextInput value={fullName} onChange={setFullName} label="Full name" autoComplete="name" />
@@ -163,8 +202,78 @@ function ProfileEditor() {
         >
           <Save className="h-4 w-4" /> {busy ? "Saving..." : "Save profile"}
         </button>
+      </form>
+
+      <section className="rounded-2xl border border-border bg-card p-5 shadow-card lg:col-span-2">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary">
+              <LifeBuoy className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="font-display text-xl font-semibold">Support tickets</h2>
+              <p className="text-sm text-muted-foreground">Log system issues, account warnings, bans, and appeals for admins to resolve.</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowTickets((current) => !current)}
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-border bg-secondary text-primary hover:bg-muted"
+            aria-label="Open support tickets"
+            title="Open support tickets"
+          >
+            <LifeBuoy className="h-5 w-5" />
+          </button>
+        </div>
+        {showTickets && (
+          <>
+            <form onSubmit={submitTicket} className="mt-4 grid gap-3 md:grid-cols-4">
+              <input value={ticketSubject} onChange={(event) => setTicketSubject(event.target.value)} required placeholder="Subject" className="rounded-xl border border-border bg-background px-3 py-2.5 text-sm md:col-span-2" />
+              <select value={ticketCategory} onChange={(event) => setTicketCategory(event.target.value as AdminTicket["category"])} className="rounded-xl border border-border bg-background px-3 py-2.5 text-sm">
+                {["Account", "Appeal", "Safety", "Bug", "Other"].map((item) => <option key={item} value={item}>{item}</option>)}
+              </select>
+              <select value={ticketPriority} onChange={(event) => setTicketPriority(event.target.value as TicketPriority)} className="rounded-xl border border-border bg-background px-3 py-2.5 text-sm">
+                {["Low", "Medium", "High", "Urgent"].map((item) => <option key={item} value={item}>{item}</option>)}
+              </select>
+              <textarea value={ticketMessage} onChange={(event) => setTicketMessage(event.target.value)} required placeholder="What happened?" className="min-h-28 rounded-xl border border-border bg-background p-3 text-sm md:col-span-4" />
+              <button type="submit" className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground">
+                <LifeBuoy className="h-4 w-4" /> Submit ticket
+              </button>
+              {ticketNotice && <div className="self-center text-sm font-semibold text-muted-foreground md:col-span-3">{ticketNotice}</div>}
+            </form>
+            <div className="mt-5 grid gap-3 md:grid-cols-2">
+              {tickets.map((ticket) => (
+                <div key={ticket.id} className="rounded-xl border border-border bg-background/60 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold">{ticket.subject}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">{ticket.category} - {ticket.priority} - {ticket.status}</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedTicket((current) => (current === ticket.id ? null : ticket.id))}
+                      className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+                      aria-label="View ticket details"
+                      title="View details"
+                    >
+                      <Info className="h-4 w-4" />
+                    </button>
+                  </div>
+                  {expandedTicket === ticket.id && (
+                    <div className="mt-3 rounded-lg border border-border bg-card p-3">
+                      <div className="text-[11px] font-semibold text-muted-foreground">{new Date(ticket.updatedAt).toLocaleString()}</div>
+                      <p className="mt-2 text-sm text-muted-foreground">{ticket.message}</p>
+                      {ticket.adminResponse && <div className="mt-3 rounded-lg bg-secondary p-3 text-sm">Admin: {ticket.adminResponse}</div>}
+                    </div>
+                  )}
+                </div>
+              ))}
+              {tickets.length === 0 && <p className="text-sm text-muted-foreground">No tickets yet.</p>}
+            </div>
+          </>
+        )}
       </section>
-    </form>
+    </div>
   );
 }
 

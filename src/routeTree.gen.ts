@@ -16,6 +16,7 @@ import { Route as InsightsRouteImport } from './routes/insights'
 import { Route as GroceriesRouteImport } from './routes/groceries'
 import { Route as FeedRouteImport } from './routes/feed'
 import { Route as EmergencyRouteImport } from './routes/emergency'
+import { Route as CreatePostRouteImport } from './routes/create-post'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as CartRouteImport } from './routes/cart'
 import { Route as AvailabilityRouteImport } from './routes/availability'
@@ -27,9 +28,11 @@ import { Route as ApiReviewIntelligenceRouteImport } from './routes/api/review-i
 import { Route as ApiGroceriesRouteImport } from './routes/api/groceries'
 import { Route as ApiCommunityMapRouteImport } from './routes/api/community-map'
 import { Route as ApiCommunityRouteImport } from './routes/api/community'
+import { Route as ApiBroadcastsRouteImport } from './routes/api/broadcasts'
 import { Route as ApiAdminRouteImport } from './routes/api/admin'
 import { Route as ApiCommunityActivityRouteImport } from './routes/api/community/activity'
 import { Route as ApiAuthSignupRouteImport } from './routes/api/auth/signup'
+import { Route as ApiAuthResetPasswordRouteImport } from './routes/api/auth/reset-password'
 import { Route as ApiAuthProfileRouteImport } from './routes/api/auth/profile'
 import { Route as ApiAuthLogoutRouteImport } from './routes/api/auth/logout'
 import { Route as ApiAuthLoginRouteImport } from './routes/api/auth/login'
@@ -70,6 +73,11 @@ const FeedRoute = FeedRouteImport.update({
 const EmergencyRoute = EmergencyRouteImport.update({
   id: '/emergency',
   path: '/emergency',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CreatePostRoute = CreatePostRouteImport.update({
+  id: '/create-post',
+  path: '/create-post',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ChatRoute = ChatRouteImport.update({
@@ -127,6 +135,11 @@ const ApiCommunityRoute = ApiCommunityRouteImport.update({
   path: '/api/community',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiBroadcastsRoute = ApiBroadcastsRouteImport.update({
+  id: '/api/broadcasts',
+  path: '/api/broadcasts',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAdminRoute = ApiAdminRouteImport.update({
   id: '/api/admin',
   path: '/api/admin',
@@ -140,6 +153,11 @@ const ApiCommunityActivityRoute = ApiCommunityActivityRouteImport.update({
 const ApiAuthSignupRoute = ApiAuthSignupRouteImport.update({
   id: '/api/auth/signup',
   path: '/api/auth/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthResetPasswordRoute = ApiAuthResetPasswordRouteImport.update({
+  id: '/api/auth/reset-password',
+  path: '/api/auth/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAuthProfileRoute = ApiAuthProfileRouteImport.update({
@@ -179,6 +197,7 @@ export interface FileRoutesByFullPath {
   '/availability': typeof AvailabilityRoute
   '/cart': typeof CartRoute
   '/chat': typeof ChatRoute
+  '/create-post': typeof CreatePostRoute
   '/emergency': typeof EmergencyRoute
   '/feed': typeof FeedRoute
   '/groceries': typeof GroceriesRoute
@@ -187,6 +206,7 @@ export interface FileRoutesByFullPath {
   '/signin': typeof SigninRoute
   '/signup': typeof SignupRoute
   '/api/admin': typeof ApiAdminRouteWithChildren
+  '/api/broadcasts': typeof ApiBroadcastsRoute
   '/api/community': typeof ApiCommunityRouteWithChildren
   '/api/community-map': typeof ApiCommunityMapRoute
   '/api/groceries': typeof ApiGroceriesRoute
@@ -198,6 +218,7 @@ export interface FileRoutesByFullPath {
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/profile': typeof ApiAuthProfileRoute
+  '/api/auth/reset-password': typeof ApiAuthResetPasswordRoute
   '/api/auth/signup': typeof ApiAuthSignupRoute
   '/api/community/activity': typeof ApiCommunityActivityRoute
   '/api/admin/users/$userId': typeof ApiAdminUsersUserIdRoute
@@ -208,6 +229,7 @@ export interface FileRoutesByTo {
   '/availability': typeof AvailabilityRoute
   '/cart': typeof CartRoute
   '/chat': typeof ChatRoute
+  '/create-post': typeof CreatePostRoute
   '/emergency': typeof EmergencyRoute
   '/feed': typeof FeedRoute
   '/groceries': typeof GroceriesRoute
@@ -216,6 +238,7 @@ export interface FileRoutesByTo {
   '/signin': typeof SigninRoute
   '/signup': typeof SignupRoute
   '/api/admin': typeof ApiAdminRouteWithChildren
+  '/api/broadcasts': typeof ApiBroadcastsRoute
   '/api/community': typeof ApiCommunityRouteWithChildren
   '/api/community-map': typeof ApiCommunityMapRoute
   '/api/groceries': typeof ApiGroceriesRoute
@@ -227,6 +250,7 @@ export interface FileRoutesByTo {
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/profile': typeof ApiAuthProfileRoute
+  '/api/auth/reset-password': typeof ApiAuthResetPasswordRoute
   '/api/auth/signup': typeof ApiAuthSignupRoute
   '/api/community/activity': typeof ApiCommunityActivityRoute
   '/api/admin/users/$userId': typeof ApiAdminUsersUserIdRoute
@@ -238,6 +262,7 @@ export interface FileRoutesById {
   '/availability': typeof AvailabilityRoute
   '/cart': typeof CartRoute
   '/chat': typeof ChatRoute
+  '/create-post': typeof CreatePostRoute
   '/emergency': typeof EmergencyRoute
   '/feed': typeof FeedRoute
   '/groceries': typeof GroceriesRoute
@@ -246,6 +271,7 @@ export interface FileRoutesById {
   '/signin': typeof SigninRoute
   '/signup': typeof SignupRoute
   '/api/admin': typeof ApiAdminRouteWithChildren
+  '/api/broadcasts': typeof ApiBroadcastsRoute
   '/api/community': typeof ApiCommunityRouteWithChildren
   '/api/community-map': typeof ApiCommunityMapRoute
   '/api/groceries': typeof ApiGroceriesRoute
@@ -257,6 +283,7 @@ export interface FileRoutesById {
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/profile': typeof ApiAuthProfileRoute
+  '/api/auth/reset-password': typeof ApiAuthResetPasswordRoute
   '/api/auth/signup': typeof ApiAuthSignupRoute
   '/api/community/activity': typeof ApiCommunityActivityRoute
   '/api/admin/users/$userId': typeof ApiAdminUsersUserIdRoute
@@ -269,6 +296,7 @@ export interface FileRouteTypes {
     | '/availability'
     | '/cart'
     | '/chat'
+    | '/create-post'
     | '/emergency'
     | '/feed'
     | '/groceries'
@@ -277,6 +305,7 @@ export interface FileRouteTypes {
     | '/signin'
     | '/signup'
     | '/api/admin'
+    | '/api/broadcasts'
     | '/api/community'
     | '/api/community-map'
     | '/api/groceries'
@@ -288,6 +317,7 @@ export interface FileRouteTypes {
     | '/api/auth/login'
     | '/api/auth/logout'
     | '/api/auth/profile'
+    | '/api/auth/reset-password'
     | '/api/auth/signup'
     | '/api/community/activity'
     | '/api/admin/users/$userId'
@@ -298,6 +328,7 @@ export interface FileRouteTypes {
     | '/availability'
     | '/cart'
     | '/chat'
+    | '/create-post'
     | '/emergency'
     | '/feed'
     | '/groceries'
@@ -306,6 +337,7 @@ export interface FileRouteTypes {
     | '/signin'
     | '/signup'
     | '/api/admin'
+    | '/api/broadcasts'
     | '/api/community'
     | '/api/community-map'
     | '/api/groceries'
@@ -317,6 +349,7 @@ export interface FileRouteTypes {
     | '/api/auth/login'
     | '/api/auth/logout'
     | '/api/auth/profile'
+    | '/api/auth/reset-password'
     | '/api/auth/signup'
     | '/api/community/activity'
     | '/api/admin/users/$userId'
@@ -327,6 +360,7 @@ export interface FileRouteTypes {
     | '/availability'
     | '/cart'
     | '/chat'
+    | '/create-post'
     | '/emergency'
     | '/feed'
     | '/groceries'
@@ -335,6 +369,7 @@ export interface FileRouteTypes {
     | '/signin'
     | '/signup'
     | '/api/admin'
+    | '/api/broadcasts'
     | '/api/community'
     | '/api/community-map'
     | '/api/groceries'
@@ -346,6 +381,7 @@ export interface FileRouteTypes {
     | '/api/auth/login'
     | '/api/auth/logout'
     | '/api/auth/profile'
+    | '/api/auth/reset-password'
     | '/api/auth/signup'
     | '/api/community/activity'
     | '/api/admin/users/$userId'
@@ -357,6 +393,7 @@ export interface RootRouteChildren {
   AvailabilityRoute: typeof AvailabilityRoute
   CartRoute: typeof CartRoute
   ChatRoute: typeof ChatRoute
+  CreatePostRoute: typeof CreatePostRoute
   EmergencyRoute: typeof EmergencyRoute
   FeedRoute: typeof FeedRoute
   GroceriesRoute: typeof GroceriesRoute
@@ -365,6 +402,7 @@ export interface RootRouteChildren {
   SigninRoute: typeof SigninRoute
   SignupRoute: typeof SignupRoute
   ApiAdminRoute: typeof ApiAdminRouteWithChildren
+  ApiBroadcastsRoute: typeof ApiBroadcastsRoute
   ApiCommunityRoute: typeof ApiCommunityRouteWithChildren
   ApiCommunityMapRoute: typeof ApiCommunityMapRoute
   ApiGroceriesRoute: typeof ApiGroceriesRoute
@@ -374,6 +412,7 @@ export interface RootRouteChildren {
   ApiAuthLoginRoute: typeof ApiAuthLoginRoute
   ApiAuthLogoutRoute: typeof ApiAuthLogoutRoute
   ApiAuthProfileRoute: typeof ApiAuthProfileRoute
+  ApiAuthResetPasswordRoute: typeof ApiAuthResetPasswordRoute
   ApiAuthSignupRoute: typeof ApiAuthSignupRoute
 }
 
@@ -426,6 +465,13 @@ declare module '@tanstack/react-router' {
       path: '/emergency'
       fullPath: '/emergency'
       preLoaderRoute: typeof EmergencyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/create-post': {
+      id: '/create-post'
+      path: '/create-post'
+      fullPath: '/create-post'
+      preLoaderRoute: typeof CreatePostRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/chat': {
@@ -505,6 +551,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCommunityRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/broadcasts': {
+      id: '/api/broadcasts'
+      path: '/api/broadcasts'
+      fullPath: '/api/broadcasts'
+      preLoaderRoute: typeof ApiBroadcastsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/admin': {
       id: '/api/admin'
       path: '/api/admin'
@@ -524,6 +577,13 @@ declare module '@tanstack/react-router' {
       path: '/api/auth/signup'
       fullPath: '/api/auth/signup'
       preLoaderRoute: typeof ApiAuthSignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/reset-password': {
+      id: '/api/auth/reset-password'
+      path: '/api/auth/reset-password'
+      fullPath: '/api/auth/reset-password'
+      preLoaderRoute: typeof ApiAuthResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/auth/profile': {
@@ -605,6 +665,7 @@ const rootRouteChildren: RootRouteChildren = {
   AvailabilityRoute: AvailabilityRoute,
   CartRoute: CartRoute,
   ChatRoute: ChatRoute,
+  CreatePostRoute: CreatePostRoute,
   EmergencyRoute: EmergencyRoute,
   FeedRoute: FeedRoute,
   GroceriesRoute: GroceriesRoute,
@@ -613,6 +674,7 @@ const rootRouteChildren: RootRouteChildren = {
   SigninRoute: SigninRoute,
   SignupRoute: SignupRoute,
   ApiAdminRoute: ApiAdminRouteWithChildren,
+  ApiBroadcastsRoute: ApiBroadcastsRoute,
   ApiCommunityRoute: ApiCommunityRouteWithChildren,
   ApiCommunityMapRoute: ApiCommunityMapRoute,
   ApiGroceriesRoute: ApiGroceriesRoute,
@@ -622,6 +684,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAuthLoginRoute: ApiAuthLoginRoute,
   ApiAuthLogoutRoute: ApiAuthLogoutRoute,
   ApiAuthProfileRoute: ApiAuthProfileRoute,
+  ApiAuthResetPasswordRoute: ApiAuthResetPasswordRoute,
   ApiAuthSignupRoute: ApiAuthSignupRoute,
 }
 export const routeTree = rootRouteImport
