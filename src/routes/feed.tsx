@@ -7,16 +7,13 @@ import {
   Camera,
   ChevronDown,
   ChevronUp,
-  EyeOff,
   Gauge,
   Heart,
   ImagePlus,
-  LocateFixed,
   MapPin,
   MessageCircle,
   MessageSquareReply,
   MessageSquareText,
-  MousePointer2,
   Radio,
   Send,
   ShieldCheck,
@@ -57,36 +54,18 @@ type LocationHit = {
   lng: number;
 };
 
-type CommunityPlace = {
-  id: string;
-  name: string;
-  category: string;
-  address: string;
-  rating?: number;
-  lat: number;
-  lng: number;
-};
-
 type FeedTab = "Nearby" | "Trending" | "Latest" | "Municipal Alerts";
 
 const POST_CATEGORIES: PostCategory[] = ["Alert", "Event", "Job", "Community Update", "Safety Issue"];
 const FEED_TABS: FeedTab[] = ["Nearby", "Trending", "Latest", "Municipal Alerts"];
-const DEFAULT_MAP_CENTER = { lat: -33.9249, lng: 18.4241 };
-const PLACE_SEARCHES = [
-  { category: "Nearby places", type: "point_of_interest", keyword: "community" },
-  { category: "Clinics", type: "hospital", keyword: "clinic" },
-  { category: "NGOs", type: "point_of_interest", keyword: "NGO community organisation" },
-  { category: "Grocery stores", type: "grocery_or_supermarket", keyword: "grocery supermarket" },
-  { category: "Municipal offices", type: "local_government_office", keyword: "municipal office" },
-  { category: "Emergency services", type: "police", keyword: "emergency police fire ambulance" },
-  { category: "Community hotspots", type: "point_of_interest", keyword: "community centre library market" },
-] as const;
+
+const postCommentKey = (postId: string) => `post:${postId}`;
 
 export const Route = createFileRoute("/feed")({
   head: () => ({
     meta: [
-      { title: "Community Feed - CommunityHub" },
-      { name: "description", content: "Share community updates, requests and screenshots." },
+      { title: "Community Feed - Community Compass" },
+      { name: "description", content: "Talk with people in your area, create posts, and share local information." },
     ],
   }),
   component: FeedPage,
@@ -119,9 +98,10 @@ function FeedPage() {
 
   useEffect(() => {
     const query = area.trim();
-    if (query || coords) setRegion(detectCapeTownRegion(query, coords));
+    if (query) setRegion(detectCapeTownRegion(query, coords));
     if (query.length < 4 || /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/.test(query)) {
       setLocationHits([]);
+      setLocationSearching(false);
       return;
     }
 
@@ -144,11 +124,6 @@ function FeedPage() {
           lng: Number(item.lon),
         })).filter((item) => Number.isFinite(item.lat) && Number.isFinite(item.lng));
         setLocationHits(hits);
-        if (hits[0]) {
-          const nextCoords = { lat: Number(hits[0].lat.toFixed(5)), lng: Number(hits[0].lng.toFixed(5)) };
-          setCoords(nextCoords);
-          setRegion(detectCapeTownRegion(hits[0].label, nextCoords));
-        }
       } catch (error) {
         setLocationHits([]);
         setLocationError(error instanceof Error ? error.message : "Location search failed");
@@ -158,7 +133,7 @@ function FeedPage() {
     }, 650);
 
     return () => window.clearTimeout(timer);
-  }, [area, coords]);
+  }, [area]);
 
   useEffect(() => {
     if (!user) return;
@@ -281,8 +256,6 @@ function FeedPage() {
   }, [regionalFilter, user]);
 
   const canPost = message.trim().length > 0 || image;
-  const draftAnalysis = useMemo(() => analyzeIncident(message, Boolean(image)), [message, image]);
-
   const allRegionalThreads = useMemo(() => {
     const threads = buildAreaThreads(posts, chatSessions, areaComments);
     return CAPE_TOWN_REGIONS.map((regionName) => {
@@ -302,18 +275,28 @@ function FeedPage() {
     const withRegions = posts.map((post) => ({ ...post, region: post.region ?? detectCapeTownRegion(post.area, post.coords) }));
     const filtered = withRegions.filter((post) => {
       if (post.region !== regionalFilter) return false;
-      if (activeTab === "Municipal Alerts") return post.category === "Alert" || analyzeIncident(post.message, Boolean(post.image)).category === "Infrastructure";
+      if (activeTab === "Municipal Alerts") {
+        return post.category === "Alert" || analyzeIncident(post.message, Boolean(post.image)).category === "Infrastructure";
+      }
+      if (activeTab === "Nearby" && coords) {
+        return post.coords ? distanceBetweenCoords(coords, post.coords) <= 15 : true;
+      }
       return true;
     });
-    const sorted = [...filtered].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
-    if (activeTab !== "Trending") return sorted;
-    return sorted.sort((a, b) => engagementForPost(b, areaComments) - engagementForPost(a, areaComments));
-  }, [activeTab, areaComments, posts, regionalFilter]);
 
-  const recentChats = useMemo(
-    () => [...chatSessions].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).slice(0, 5),
-    [chatSessions],
-  );
+    const sortedByDate = [...filtered].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+    if (activeTab === "Trending") {
+      return sortedByDate.sort((a, b) => engagementForPost(b, areaComments) - engagementForPost(a, areaComments));
+    }
+    if (activeTab === "Nearby" && coords) {
+      return [...sortedByDate].sort((a, b) => {
+        const distanceA = a.coords ? distanceBetweenCoords(coords, a.coords) : Number.POSITIVE_INFINITY;
+        const distanceB = b.coords ? distanceBetweenCoords(coords, b.coords) : Number.POSITIVE_INFINITY;
+        return distanceA === distanceB ? Date.parse(b.createdAt) - Date.parse(a.createdAt) : distanceA - distanceB;
+      });
+    }
+    return sortedByDate;
+  }, [activeTab, areaComments, coords, posts, regionalFilter]);
 
   const selectedRegionalThread = useMemo(
     () => allRegionalThreads.find((thread) => thread.region === regionalFilter) ?? emptyRegionalThread(regionalFilter),
@@ -401,6 +384,94 @@ function FeedPage() {
           },
         ],
       };
+      saveAreaComments(next);
+      broadcastCommunityChange();
+      return next;
+    });
+  };
+
+  const addPostComment = (postId: string, text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    setAreaComments((current) => {
+      const key = postCommentKey(postId);
+      const next = {
+        ...current,
+        [key]: [
+          ...(current[key] ?? []),
+          {
+            id: crypto.randomUUID(),
+            author: user ? `@${user.username}` : name.trim() || t("feed.defaultName"),
+            text: trimmed,
+            likes: 0,
+            createdAt: new Date().toISOString(),
+            replies: [],
+          },
+        ],
+      };
+      saveAreaComments(next);
+      broadcastCommunityChange();
+      return next;
+    });
+  };
+
+  const addPostReply = (postId: string, commentId: string, text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    setAreaComments((current) => {
+      const key = postCommentKey(postId);
+      const next = {
+        ...current,
+        [key]: (current[key] ?? []).map((comment) =>
+          comment.id === commentId
+            ? {
+                ...comment,
+                replies: [
+                  ...comment.replies,
+                  {
+                    id: crypto.randomUUID(),
+                    author: user ? `@${user.username}` : name.trim() || t("feed.defaultName"),
+                    text: trimmed,
+                    likes: 0,
+                    createdAt: new Date().toISOString(),
+                    replies: [],
+                  },
+                ],
+              }
+            : comment,
+        ),
+      };
+      saveAreaComments(next);
+      broadcastCommunityChange();
+      return next;
+    });
+  };
+
+  const likePostComment = (postId: string, commentId: string) => {
+    setAreaComments((current) => {
+      const key = postCommentKey(postId);
+      const next = { ...current, [key]: (current[key] ?? []).map((comment) => likeCommentTree(comment, commentId)) };
+      saveAreaComments(next);
+      broadcastCommunityChange();
+      return next;
+    });
+  };
+
+  const unlikePostComment = (postId: string, commentId: string) => {
+    setAreaComments((current) => {
+      const key = postCommentKey(postId);
+      const next = { ...current, [key]: (current[key] ?? []).map((comment) => unlikeCommentTree(comment, commentId)) };
+      saveAreaComments(next);
+      broadcastCommunityChange();
+      return next;
+    });
+  };
+
+  const deletePostComment = (postId: string, commentId: string) => {
+    const currentAuthor = user ? `@${user.username}` : name.trim() || t("feed.defaultName");
+    setAreaComments((current) => {
+      const key = postCommentKey(postId);
+      const next = { ...current, [key]: deleteOwnCommentTree(current[key] ?? [], commentId, currentAuthor) };
       saveAreaComments(next);
       broadcastCommunityChange();
       return next;
@@ -497,18 +568,6 @@ function FeedPage() {
     setLocationHits([]);
   };
 
-  const dropPin = (event: React.MouseEvent<HTMLButtonElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const x = (event.clientX - rect.left) / rect.width;
-    const y = (event.clientY - rect.top) / rect.height;
-    const lng = Number((-180 + x * 360).toFixed(5));
-    const lat = Number((90 - y * 180).toFixed(5));
-    const nextCoords = { lat, lng };
-    setCoords(nextCoords);
-    setRegion(detectCapeTownRegion(area, nextCoords));
-    if (!area.trim()) setArea(`${lat}, ${lng}`);
-  };
-
   return (
     <div className="px-4 md:px-10 py-8 md:py-10 max-w-6xl mx-auto">
       <section className="relative overflow-hidden rounded-3xl mb-8 p-8 md:p-10 text-white shadow-elegant bg-[linear-gradient(135deg,#0f766e,#2563eb)]">
@@ -518,24 +577,129 @@ function FeedPage() {
             <UsersRound className="h-3.5 w-3.5" /> {t("nav.feed")}
           </span>
           <h1 className="font-display text-3xl md:text-4xl font-bold tracking-tight mt-3">{t("feed.title")}</h1>
-          <p className="text-white/90 mt-2">{t("feed.subtitle")}</p>
+          <p className="text-white/90 mt-2">
+            A simple place to talk with people nearby, post local updates, ask for help, and share what is happening in your area.
+          </p>
         </div>
       </section>
 
       <div className="space-y-4">
-        <section className="rounded-2xl border border-border bg-card p-4 shadow-card">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <section className="rounded-2xl border border-border bg-card p-5 shadow-card">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="font-display font-semibold">{t("feed.compose")}</h2>
-              <p className="text-xs text-muted-foreground">Create updates on a dedicated page so the feed stays easy to scan.</p>
+              <h2 className="font-display text-lg font-semibold">{t("feed.compose")}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">Share a quick update, question, warning, or request with people nearby.</p>
             </div>
             <Link
               to="/create-post"
-              className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground"
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-border bg-secondary px-3 py-2 text-xs font-semibold text-secondary-foreground hover:bg-muted"
             >
-              <MessageSquareText className="h-4 w-4" /> Create post
+              <MessageSquareText className="h-3.5 w-3.5" /> Full post page
             </Link>
           </div>
+
+          <form onSubmit={addPost} className="mt-4 space-y-3">
+            <div className="grid gap-3 md:grid-cols-[1fr_1fr_190px]">
+              {!user && (
+                <input
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder={t("feed.name")}
+                  className="rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+                />
+              )}
+              <div className="relative">
+                <input
+                  value={area}
+                  onChange={(event) => setArea(event.target.value)}
+                  placeholder={t("feed.area")}
+                  className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+                />
+                {locationHits.length > 0 && (
+                  <div className="absolute z-30 mt-1 max-h-48 w-full overflow-auto rounded-xl border border-border bg-popover p-1 shadow-elegant">
+                    {locationHits.map((hit) => (
+                      <button
+                        key={`${hit.lat}-${hit.lng}`}
+                        type="button"
+                        onClick={() => chooseLocation(hit)}
+                        className="w-full rounded-lg px-3 py-2 text-left text-xs hover:bg-secondary"
+                      >
+                        {hit.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <select
+                value={category}
+                onChange={(event) => setCategory(event.target.value as PostCategory)}
+                className="rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+              >
+                {POST_CATEGORIES.map((item) => (
+                  <option key={item} value={item}>{item}</option>
+                ))}
+              </select>
+            </div>
+
+            <textarea
+              value={message}
+              onChange={(event) => setMessage(event.target.value)}
+              placeholder="What should people nearby know?"
+              rows={4}
+              className="w-full resize-none rounded-xl border border-border bg-background px-3 py-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+            />
+
+            {image && (
+              <div className="relative inline-block">
+                <img src={image} alt={t("feed.preview")} className="max-h-40 rounded-xl border border-border object-cover" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setImage(undefined);
+                    if (fileRef.current) fileRef.current.value = "";
+                  }}
+                  className="absolute right-2 top-2 rounded-lg bg-background/90 px-2 py-1 text-xs font-semibold text-destructive"
+                >
+                  Remove
+                </button>
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(event) => handleImage(event.target.files?.[0])} />
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-secondary px-3 py-2 text-xs font-semibold text-secondary-foreground hover:bg-muted"
+                >
+                  <ImagePlus className="h-3.5 w-3.5" /> Photo
+                </button>
+                <button
+                  type="button"
+                  onClick={useCurrentLocation}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-secondary px-3 py-2 text-xs font-semibold text-secondary-foreground hover:bg-muted"
+                >
+                  <MapPin className="h-3.5 w-3.5" /> Use location
+                </button>
+                <label className="inline-flex items-center gap-2 rounded-lg px-2 py-2 text-xs font-semibold text-muted-foreground">
+                  <input type="checkbox" checked={anonymous} onChange={(event) => setAnonymous(event.target.checked)} />
+                  Post anonymously
+                </label>
+              </div>
+              <button
+                disabled={!canPost}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Send className="h-4 w-4" /> Post update
+              </button>
+            </div>
+            {(locationSearching || locationError) && (
+              <p className="text-xs text-muted-foreground">
+                {locationSearching ? "Finding matching areas..." : locationError}
+              </p>
+            )}
+          </form>
         </section>
 
         <div className="space-y-4">
@@ -553,7 +717,17 @@ function FeedPage() {
                   </button>
                 ))}
               </div>
-              <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <select
+                  value={regionalFilter}
+                  onChange={(event) => setRegionalFilter(event.target.value as CapeTownRegion)}
+                  className="min-w-48 rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
+                  aria-label="Choose feed area"
+                >
+                  {CAPE_TOWN_REGIONS.map((item) => (
+                    <option key={item} value={item}>{item}</option>
+                  ))}
+                </select>
                 {liveActivity.map((item) => (
                   <span key={item.region} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1">
                     <Radio className="h-3.5 w-3.5 text-emerald-500" /> {item.alerts > 0 ? `${item.alerts} new alerts in ${item.region}` : activePeopleLabel(item.active, item.region)}
@@ -563,261 +737,38 @@ function FeedPage() {
             </div>
           </section>
 
-          <CommunityMap coords={coords} area={area} region={regionalFilter} />
-
-          {recentChats.length > 0 && (
-            <section className="bg-card border border-border rounded-2xl p-5 shadow-card">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="font-display font-semibold">Community chat history</h2>
-                  <p className="text-xs text-muted-foreground">Recent chats other users saved for the community feed.</p>
-                </div>
-                <MessageCircle className="h-5 w-5 text-primary" />
-              </div>
-              <div className="mt-4 grid gap-3">
-                {recentChats.map((chat) => (
-                  <ChatHistoryCard key={chat.id} chat={chat} />
-                ))}
-              </div>
-            </section>
-          )}
-
-          <section className="space-y-3">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h2 className="font-display font-semibold">Cape Town Regional Groups</h2>
-              </div>
-              <select
-                value={regionalFilter}
-                onChange={(event) => setRegionalFilter(event.target.value as CapeTownRegion)}
-                className="min-w-56 px-3 py-2.5 rounded-xl bg-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                aria-label="Filter Cape Town regional groups"
-              >
-                {CAPE_TOWN_REGIONS.map((item) => (
-                  <option key={item} value={item}>{item}</option>
-                ))}
-              </select>
+          <section>
+            <div className="mb-3">
+              <h2 className="font-display text-lg font-semibold">Posts in {regionalFilter}</h2>
+              <p className="text-sm text-muted-foreground">Read updates from nearby people and reply directly to any post.</p>
             </div>
-            <AreaCard
-              key="regional-filter-card"
-              thread={selectedRegionalThread}
-              currentAuthor={name.trim() || t("feed.defaultName")}
-              onComment={(text) => addAreaComment(selectedRegionalThread.region, text)}
-              onReply={(commentId, text) => addAreaReply(selectedRegionalThread.region, commentId, text)}
-              onLike={(commentId) => likeAreaComment(selectedRegionalThread.region, commentId)}
-              onUnlike={(commentId) => unlikeAreaComment(selectedRegionalThread.region, commentId)}
-              onDeleteComment={(commentId) => deleteAreaComment(selectedRegionalThread.region, commentId)}
-              localAlerts={localAlerts}
-            />
+            {sortedPosts.length === 0 ? (
+              <div className="text-center py-16 rounded-2xl bg-card border border-dashed border-border">
+                <Camera className="h-6 w-6 mx-auto text-primary mb-3" />
+                <p className="text-muted-foreground">{t("feed.empty")}</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {sortedPosts.map((post) => (
+                  <FeedArticle
+                    key={post.id}
+                    post={{ ...post, region: post.region ?? detectCapeTownRegion(post.area, post.coords) }}
+                    comments={areaComments[postCommentKey(post.id)] ?? []}
+                    currentAuthor={user ? `@${user.username}` : name.trim() || t("feed.defaultName")}
+                    onComment={(text) => addPostComment(post.id, text)}
+                    onReply={(commentId, text) => addPostReply(post.id, commentId, text)}
+                    onLike={(commentId) => likePostComment(post.id, commentId)}
+                    onUnlike={(commentId) => unlikePostComment(post.id, commentId)}
+                    onDeleteComment={(commentId) => deletePostComment(post.id, commentId)}
+                    onRemove={removePost}
+                  />
+                ))}
+              </div>
+            )}
           </section>
-
-          {sortedPosts.length === 0 ? (
-            <div className="text-center py-16 rounded-2xl bg-card border border-dashed border-border">
-              <Camera className="h-6 w-6 mx-auto text-primary mb-3" />
-              <p className="text-muted-foreground">{t("feed.empty")}</p>
-            </div>
-          ) : (
-            sortedPosts.map((post) => (
-              <FeedArticle key={post.id} post={{ ...post, region: post.region ?? detectCapeTownRegion(post.area, post.coords) }} onRemove={removePost} />
-            ))
-          )}
         </div>
       </div>
     </div>
-  );
-}
-
-function CommunityMap({
-  coords,
-  area,
-  region,
-}: {
-  coords?: { lat: number; lng: number };
-  area: string;
-  region: CapeTownRegion;
-}) {
-  const [center, setCenter] = useState(coords ?? DEFAULT_MAP_CENTER);
-  const [places, setPlaces] = useState<CommunityPlace[]>([]);
-  const [status, setStatus] = useState("Loading nearby community places...");
-  const [activeCategory, setActiveCategory] = useState("All");
-
-  useEffect(() => {
-    if (coords) setCenter(coords);
-  }, [coords]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadPlaces() {
-      try {
-        setStatus("Loading nearby community places...");
-        const params = new URLSearchParams({ lat: String(center.lat), lng: String(center.lng) });
-        const response = await fetch(`/api/community-map?${params.toString()}`);
-        const json = (await response.json()) as { places?: CommunityPlace[]; error?: string };
-        if (!response.ok) throw new Error(json.error ?? "Nearby places could not load");
-        if (cancelled) return;
-
-        const nextPlaces = json.places ?? [];
-        setPlaces(nextPlaces);
-        setStatus(nextPlaces.length ? `${nextPlaces.length} nearby community places found` : "No nearby places found");
-      } catch (error) {
-        if (!cancelled) {
-          setPlaces([]);
-          setStatus(error instanceof Error ? error.message : "Nearby places could not load");
-        }
-      }
-    }
-
-    void loadPlaces();
-    return () => {
-      cancelled = true;
-    };
-  }, [center]);
-
-  const useMapLocation = () => {
-    setStatus("Finding your current location...");
-    navigator.geolocation?.getCurrentPosition(
-      (position) => {
-        setCenter({
-          lat: Number(position.coords.latitude.toFixed(5)),
-          lng: Number(position.coords.longitude.toFixed(5)),
-        });
-      },
-      () => setStatus("Location permission was not granted"),
-    );
-  };
-
-  const visiblePlaces =
-    activeCategory === "All" ? places : places.filter((place) => place.category === activeCategory);
-  const categories = ["All", ...PLACE_SEARCHES.map((search) => search.category)];
-  const centerMapUrl = `https://www.google.com/maps/search/?api=1&query=${center.lat},${center.lng}`;
-
-  return (
-    <section className="bg-card border border-border rounded-2xl p-5 shadow-card">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="font-display font-semibold inline-flex items-center gap-2">
-            <MapPin className="h-4 w-4 text-primary" /> Community Map
-          </h2>
-          <p className="mt-1 text-xs text-muted-foreground">{status}</p>
-        </div>
-        <button
-          type="button"
-          onClick={useMapLocation}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-secondary px-3 py-2 text-xs font-semibold text-secondary-foreground hover:bg-muted"
-        >
-          <LocateFixed className="h-3.5 w-3.5" /> Use my location
-        </button>
-      </div>
-
-      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
-        <div className="relative min-h-[360px] overflow-hidden rounded-xl border border-border bg-[linear-gradient(135deg,rgba(14,165,233,.14),rgba(16,185,129,.12),rgba(250,204,21,.12))]">
-          <div className="absolute inset-0 opacity-35 [background-image:linear-gradient(to_right,currentColor_1px,transparent_1px),linear-gradient(to_bottom,currentColor_1px,transparent_1px)] [background-size:34px_34px]" />
-          <div className="absolute left-4 top-4 rounded-full border border-border bg-card/90 px-3 py-1.5 text-xs font-semibold shadow-card">
-            {area || region}
-          </div>
-          <div className="absolute left-1/2 top-1/2 grid h-14 w-14 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-primary text-primary-foreground shadow-elegant ring-8 ring-primary/20">
-            You
-          </div>
-          {visiblePlaces.slice(0, 16).map((place, index) => {
-            const left = 18 + ((index * 23) % 64);
-            const top = 20 + ((index * 31) % 58);
-            return (
-              <a
-                key={`${place.id}-pin`}
-                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${place.name} ${place.address}`)}`}
-                target="_blank"
-                rel="noreferrer"
-                className="absolute grid h-8 w-8 place-items-center rounded-full border border-background bg-emerald-500 text-[10px] font-bold text-white shadow-card transition hover:scale-110"
-                style={{ left: `${left}%`, top: `${top}%` }}
-                title={place.name}
-              >
-                {index + 1}
-              </a>
-            );
-          })}
-          <a
-            href={centerMapUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="absolute bottom-4 right-4 rounded-lg bg-card/95 px-3 py-2 text-xs font-semibold text-primary shadow-card hover:underline"
-          >
-            Open in Google Maps
-          </a>
-        </div>
-        <div className="space-y-3">
-          <div className="flex flex-wrap gap-1.5">
-            {categories.map((categoryName) => (
-              <button
-                key={categoryName}
-                type="button"
-                onClick={() => setActiveCategory(categoryName)}
-                className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${activeCategory === categoryName ? "border-primary bg-primary text-primary-foreground" : "border-border bg-secondary text-secondary-foreground hover:bg-muted"}`}
-              >
-                {categoryName}
-              </button>
-            ))}
-          </div>
-          <div className="max-h-[300px] space-y-2 overflow-auto pr-1">
-            {visiblePlaces.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border px-3 py-4 text-xs text-muted-foreground">
-                Nearby services will appear here when Google Places returns matches.
-              </div>
-            ) : (
-              visiblePlaces.map((place) => (
-                <div key={place.id} className="rounded-xl border border-border bg-secondary/35 px-3 py-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <h3 className="text-sm font-semibold leading-tight">{place.name}</h3>
-                      <p className="mt-1 text-[11px] text-muted-foreground">{place.category}</p>
-                    </div>
-                    {place.rating && (
-                      <span className="rounded-full bg-background px-2 py-0.5 text-[10px] font-bold text-muted-foreground border border-border">
-                        {place.rating.toFixed(1)}
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-2 text-xs text-muted-foreground">{place.address}</p>
-                  <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${place.name} ${place.address}`)}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-2 inline-flex text-xs font-semibold text-primary hover:underline"
-                  >
-                    Open in Google Maps
-                  </a>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function ChatHistoryCard({ chat }: { chat: CommunityChatSession }) {
-  const preview = [...chat.messages].reverse().find((message) => message.role === "user") ?? chat.messages.at(-1);
-  const region = chat.region ?? detectCapeTownRegion(chat.area);
-
-  return (
-    <article className="rounded-xl border border-border bg-secondary/35 px-4 py-3">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-semibold">{chat.name}</h3>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1">
-              <MapPin className="h-3.5 w-3.5" /> {region}
-            </span>
-            <span>{new Date(chat.updatedAt).toLocaleString()}</span>
-          </div>
-        </div>
-        <span className="rounded-full bg-background px-2 py-0.5 text-[10px] font-bold text-muted-foreground border border-border">
-          {chat.messages.length} messages
-        </span>
-      </div>
-      {preview && <p className="mt-3 text-sm text-muted-foreground line-clamp-2">{preview.text}</p>}
-    </article>
   );
 }
 
@@ -1081,45 +1032,216 @@ function AreaComment({
   );
 }
 
-function FeedArticle({ post, onRemove }: { post: CommunityPost; onRemove: (id: string) => void }) {
+function FeedArticle({
+  post,
+  comments,
+  currentAuthor,
+  onComment,
+  onReply,
+  onLike,
+  onUnlike,
+  onDeleteComment,
+  onRemove,
+}: {
+  post: CommunityPost;
+  comments: CommunityComment[];
+  currentAuthor: string;
+  onComment: (text: string) => void;
+  onReply: (commentId: string, text: string) => void;
+  onLike: (commentId: string) => void;
+  onUnlike: (commentId: string) => void;
+  onDeleteComment: (commentId: string) => void;
+  onRemove: (id: string) => void;
+}) {
   const { t } = useT();
+  const [showAnalysis, setShowAnalysis] = useState(false);
+  const [reply, setReply] = useState("");
   const analysis = useMemo(() => analyzeIncident(post.message, Boolean(post.image)), [post.message, post.image]);
+  const postRegion = post.region ?? detectCapeTownRegion(post.area, post.coords);
+  const commentCount = countComments(comments);
+
+  const submitReply = (event: React.FormEvent) => {
+    event.preventDefault();
+    onComment(reply);
+    setReply("");
+  };
 
   return (
-    <article className="bg-card border border-border rounded-2xl p-5 shadow-card">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h3 className="font-display font-semibold">{post.anonymous ? "Anonymous" : post.name}</h3>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1">
-              <MapPin className="h-3.5 w-3.5" /> {post.region ?? detectCapeTownRegion(post.area, post.coords)}
-            </span>
-            <span>{post.category ?? "Community Update"}</span>
-            {post.coords && <span>{post.coords.lat}, {post.coords.lng}</span>}
-            <span>{new Date(post.createdAt).toLocaleString()}</span>
+    <article className="overflow-hidden rounded-2xl border border-border bg-card shadow-card">
+      <div className="p-4 md:p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary/10 font-display text-sm font-bold text-primary">
+              {(post.anonymous ? "A" : post.name.replace(/^@/, "")[0] ?? "C").toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <h3 className="font-display font-semibold leading-tight">{post.anonymous ? "Anonymous" : post.name}</h3>
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span className="inline-flex items-center gap-1">
+                  <MapPin className="h-3.5 w-3.5" /> {postRegion}
+                </span>
+                <span>{post.category ?? "Community Update"}</span>
+                <span>{new Date(post.createdAt).toLocaleString()}</span>
+              </div>
+            </div>
           </div>
+          {!post.id.startsWith("starter") && (
+            <button
+              type="button"
+              onClick={() => onRemove(post.id)}
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+              aria-label="Delete post"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
         </div>
-        {!post.id.startsWith("starter") && (
+
+        {post.message && <p className="mt-4 whitespace-pre-wrap text-[15px] leading-relaxed">{post.message}</p>}
+        {post.image && (
+          <img
+            src={post.image}
+            alt={t("feed.preview")}
+            className="mt-4 max-h-[520px] w-full rounded-xl border border-border object-cover"
+          />
+        )}
+
+        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
+          <span>{commentCount} {commentCount === 1 ? "reply" : "replies"}</span>
+          <span>Shared in {post.area || postRegion}</span>
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-2 border-y border-border py-2">
           <button
             type="button"
-            onClick={() => onRemove(post.id)}
-            className="h-8 w-8 grid place-items-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-            aria-label={t("feed.removeImage")}
+            onClick={() => document.getElementById(`reply-${post.id}`)?.focus()}
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-secondary hover:text-foreground"
           >
-            <Trash2 className="h-4 w-4" />
+            <MessageSquareReply className="h-4 w-4" /> Reply
           </button>
-        )}
+          <button
+            type="button"
+            onClick={() => setShowAnalysis((current) => !current)}
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-secondary hover:text-foreground"
+          >
+            <BrainCircuit className="h-4 w-4" />
+            {showAnalysis ? "Hide safety read" : "Safety read"}
+          </button>
+        </div>
+
+        {showAnalysis && <AnalysisPanel analysis={analysis} />}
+
+        <form onSubmit={submitReply} className="mt-4 flex gap-2">
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-secondary text-xs font-bold text-muted-foreground">
+            {currentAuthor.replace(/^@/, "")[0]?.toUpperCase() ?? "Y"}
+          </div>
+          <input
+            id={`reply-${post.id}`}
+            value={reply}
+            onChange={(event) => setReply(event.target.value)}
+            placeholder="Write a reply..."
+            className="min-w-0 flex-1 rounded-full border border-border bg-background px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+          />
+          <button
+            disabled={!reply.trim()}
+            className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Send className="h-4 w-4" />
+            Reply
+          </button>
+        </form>
       </div>
-      {post.message && <p className="mt-4 text-sm leading-relaxed whitespace-pre-wrap">{post.message}</p>}
-      {post.image && (
-        <img
-          src={post.image}
-          alt={t("feed.preview")}
-          className="mt-4 max-h-[520px] w-full rounded-xl border border-border object-cover"
-        />
+
+      {comments.length > 0 && (
+        <div className="space-y-3 border-t border-border bg-secondary/20 p-4 md:p-5">
+          {comments.map((comment) => (
+            <PostReply
+              key={comment.id}
+              comment={comment}
+              currentAuthor={currentAuthor}
+              onReply={(text) => onReply(comment.id, text)}
+              onLike={onLike}
+              onUnlike={onUnlike}
+              onDelete={onDeleteComment}
+            />
+          ))}
+        </div>
       )}
-      <AnalysisPanel analysis={analysis} />
     </article>
+  );
+}
+
+function PostReply({
+  comment,
+  currentAuthor,
+  onReply,
+  onLike,
+  onUnlike,
+  onDelete,
+}: {
+  comment: CommunityComment;
+  currentAuthor: string;
+  onReply: (text: string) => void;
+  onLike: (commentId: string) => void;
+  onUnlike: (commentId: string) => void;
+  onDelete: (commentId: string) => void;
+}) {
+  const [reply, setReply] = useState("");
+  const canDelete = comment.author === currentAuthor;
+
+  const submitReply = (event: React.FormEvent) => {
+    event.preventDefault();
+    onReply(reply);
+    setReply("");
+  };
+
+  return (
+    <div className="flex gap-3">
+      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-background text-xs font-bold text-muted-foreground">
+        {comment.author.replace(/^@/, "")[0]?.toUpperCase() ?? "C"}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="rounded-2xl bg-background px-3 py-2">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="font-semibold">{comment.author}</span>
+            <span className="text-muted-foreground">{new Date(comment.createdAt).toLocaleString()}</span>
+          </div>
+          <p className="mt-1 text-sm">{comment.text}</p>
+        </div>
+        <div className="mt-1 flex flex-wrap items-center gap-3 px-2 text-xs font-semibold text-muted-foreground">
+          <button type="button" onClick={() => onLike(comment.id)} className="hover:text-primary">Like {comment.likes ?? 0}</button>
+          <button type="button" onClick={() => onUnlike(comment.id)} className="hover:text-primary">Unlike</button>
+          {canDelete && <button type="button" onClick={() => onDelete(comment.id)} className="hover:text-destructive">Delete</button>}
+          <span>{comment.replies.length} replies</span>
+        </div>
+        {comment.replies.length > 0 && (
+          <div className="mt-3 space-y-2">
+            {comment.replies.map((item) => (
+              <PostReply
+                key={item.id}
+                comment={item}
+                currentAuthor={currentAuthor}
+                onReply={onReply}
+                onLike={onLike}
+                onUnlike={onUnlike}
+                onDelete={onDelete}
+              />
+            ))}
+          </div>
+        )}
+        <form onSubmit={submitReply} className="mt-2 flex gap-2">
+          <input
+            value={reply}
+            onChange={(event) => setReply(event.target.value)}
+            placeholder="Reply..."
+            className="min-w-0 flex-1 rounded-full border border-border bg-background px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-ring"
+          />
+          <button disabled={!reply.trim()} className="rounded-full border border-border bg-background px-3 py-1.5 text-xs font-semibold disabled:opacity-50">
+            Send
+          </button>
+        </form>
+      </div>
+    </div>
   );
 }
 
@@ -1206,6 +1328,20 @@ function deleteOwnCommentTree(comments: CommunityComment[], targetId: string, cu
 function engagementForPost(post: CommunityPost, commentsByArea: Record<string, CommunityComment[]>) {
   const region = post.region ?? detectCapeTownRegion(post.area, post.coords);
   return countComments(commentsByArea[region] ?? []) + (post.image ? 2 : 0) + (post.category === "Alert" || post.category === "Safety Issue" ? 3 : 0);
+}
+
+function distanceBetweenCoords(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  const toRad = (value: number) => (value * Math.PI) / 180;
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const earthRadiusKm = 6371;
+  const sinDLat = Math.sin(dLat / 2);
+  const sinDLng = Math.sin(dLng / 2);
+  const haversine = sinDLat * sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLng * sinDLng;
+  const distance = 2 * earthRadiusKm * Math.asin(Math.sqrt(haversine));
+  return distance;
 }
 
 function realPosts(posts: CommunityPost[]) {

@@ -5,7 +5,7 @@ import { useT } from "@/lib/i18n";
 export const Route = createFileRoute("/emergency")({
   head: () => ({
     meta: [
-      { title: "Emergency Contacts — CommunityHub" },
+      { title: "Emergency Contacts - Community Compass" },
       { name: "description", content: "Quick-dial emergency numbers for South Africa." },
     ],
   }),

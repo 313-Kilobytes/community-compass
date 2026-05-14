@@ -1,13 +1,10 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutGrid,
-  Search,
   BarChart3,
-  MessageCircle,
-  Sparkles,
+  Compass,
   Siren,
   ShoppingBasket,
-  ShoppingCart,
   Newspaper,
   UserRound,
   ShieldCheck,
@@ -19,11 +16,8 @@ const items = [
   { title: "nav.resources" as const, url: "/", icon: LayoutGrid },
   { title: "nav.feed" as const, url: "/feed", icon: Newspaper },
   { title: "nav.groceries" as const, url: "/groceries", icon: ShoppingBasket },
-  { title: "nav.cart" as const, url: "/cart", icon: ShoppingCart },
-  { title: "nav.availability" as const, url: "/availability", icon: Search },
   { title: "nav.emergency" as const, url: "/emergency", icon: Siren },
   { title: "nav.insights" as const, url: "/insights", icon: BarChart3 },
-  { title: "nav.assistant" as const, url: "/chat", icon: MessageCircle },
   { title: "nav.profile" as const, url: "/profile", icon: UserRound },
 ];
 
@@ -46,14 +40,14 @@ export function AppSidebar() {
       />
       <div className="relative flex items-center gap-3 border-b border-sidebar-border px-5 py-6">
         <div
-          className="h-10 w-10 rounded-xl grid place-items-center shadow-glow"
+          className="h-10 w-10 rounded-lg grid place-items-center shadow-glow"
           style={{ background: "var(--gradient-primary)" }}
         >
-          <Sparkles className="h-5 w-5 text-white" />
+          <Compass className="h-5 w-5 text-white" />
         </div>
         <div>
-          <div className="font-display font-semibold text-base leading-tight">CommunityHub</div>
-          <div className="text-[11px] text-sidebar-foreground/60 tracking-wide uppercase">Crisis Intel</div>
+          <div className="font-display font-semibold text-base leading-tight">Community Compass</div>
+          <div className="text-[11px] text-sidebar-foreground/60 tracking-wide uppercase">Local resource network</div>
         </div>
       </div>
 
@@ -84,11 +78,6 @@ export function AppSidebar() {
           );
         })}
       </nav>
-
-      <div className="relative p-4 m-3 rounded-xl bg-sidebar-accent/40 border border-sidebar-border">
-        <div className="text-xs font-semibold text-sidebar-foreground/90">AI crisis hub</div>
-        <div className="text-[11px] text-sidebar-foreground/60 mt-0.5">Alerts, resources, feed, and recommendations.</div>
-      </div>
     </aside>
   );
 }

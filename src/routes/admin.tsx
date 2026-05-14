@@ -70,8 +70,8 @@ type AdminTab = (typeof adminTabs)[number];
 export const Route = createFileRoute("/admin")({
   head: () => ({
     meta: [
-      { title: "Super Admin - CommunityHub" },
-      { name: "description", content: "Manage CommunityHub users, moderation, regions, alerts, analytics, and audit controls." },
+      { title: "Super Admin - Community Compass" },
+      { name: "description", content: "Manage Community Compass users, moderation, regions, alerts, analytics, and audit controls." },
     ],
   }),
   component: AdminPage,
@@ -718,7 +718,7 @@ function AdminShell({ title, children }: { title: string; children: React.ReactN
         </div>
         <div>
           <h1 className="font-display text-3xl font-bold tracking-tight">{title}</h1>
-          <p className="text-sm text-muted-foreground">System control for CommunityHub.</p>
+          <p className="text-sm text-muted-foreground">System control for Community Compass.</p>
         </div>
       </div>
       {children}

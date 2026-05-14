@@ -381,7 +381,7 @@ async function fetchExternalAlerts(): Promise<ExternalAlert[]> {
 
 async function fetchCapeTownSource(source: string): Promise<ExternalAlert[]> {
   try {
-    const response = await fetch(source, { headers: { "User-Agent": "CommunityHub/1.0" } });
+    const response = await fetch(source, { headers: { "User-Agent": "CommunityCompass/1.0" } });
     if (!response.ok) return [];
     const html = await response.text();
     return parseCapeTownAlerts(html, source);

@@ -34,7 +34,7 @@ const GROCERY_SEARCH_STORAGE_KEY = "community-grocery-search";
 export const Route = createFileRoute("/groceries")({
   head: () => ({
     meta: [
-      { title: "Grocery Price Compare — CommunityHub" },
+      { title: "Grocery Price Compare - Community Compass" },
       { name: "description", content: "Compare grocery prices across South African retailers and build a shareable cart." },
     ],
   }),

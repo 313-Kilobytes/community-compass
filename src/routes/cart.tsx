@@ -7,7 +7,7 @@ import { useT } from "@/lib/i18n";
 export const Route = createFileRoute("/cart")({
   head: () => ({
     meta: [
-      { title: "Your Cart — CommunityHub" },
+      { title: "Your Cart - Community Compass" },
       { name: "description", content: "Your saved grocery list. Share it via email." },
     ],
   }),
@@ -22,7 +22,7 @@ function CartPage() {
   const buildBody = () => {
     const lines = items.map((i) => `• ${i.qty}× ${i.title} — ${i.store} ${i.priceText ?? ""}\n  ${i.url}`).join("\n\n");
     const sum = total > 0 ? `\n\n${t("cart.totalEst")}: R${total.toFixed(2)}` : "";
-    return `${t("cart.emailIntro")}\n\n${lines}${sum}\n\n— CommunityHub`;
+    return `${t("cart.emailIntro")}\n\n${lines}${sum}\n\n- Community Compass`;
   };
 
   const mailto = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(t("cart.emailSubject"))}&body=${encodeURIComponent(buildBody())}`;

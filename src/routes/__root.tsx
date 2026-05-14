@@ -38,20 +38,19 @@ export const Route = createRootRoute({
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { name: "theme-color", content: "#7C3AED" },
-      { title: "CommunityHub - Resource Intelligence" },
+      { title: "Community Compass - Local Resource Network" },
       {
         name: "description",
-        content: "Find clinics, NGOs, jobs, and municipal alerts in your community.",
+        content: "Find local resources, community updates, emergency contacts, and practical support near you.",
       },
-      { name: "author", content: "CommunityHub" },
-      { property: "og:title", content: "CommunityHub - Resource Intelligence" },
+      { name: "author", content: "Community Compass" },
+      { property: "og:title", content: "Community Compass - Local Resource Network" },
       {
         property: "og:description",
-        content: "Find clinics, NGOs, jobs, and municipal alerts in your community.",
+        content: "Find local resources, community updates, emergency contacts, and practical support near you.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
@@ -77,6 +76,26 @@ function RootShell({ children }: { children: React.ReactNode }) {
       <body>
         {children}
         <Scripts />
+        <script
+          type="text/javascript"
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function(d, t) {
+                  var v = d.createElement(t), s = d.getElementsByTagName(t)[0];
+                  v.onload = function() {
+                    window.voiceflow.chat.load({
+                      verify: { projectID: '69fd9a85370afbde9ec3224c' },
+                      url: 'https://general-runtime.voiceflow.com',
+                      voice: {
+                        url: "https://runtime-api.voiceflow.com"
+                      }
+                    });
+                  }
+                  v.src = "https://cdn.voiceflow.com/widget-next/bundle.mjs"; v.type = "text/javascript"; s.parentNode.insertBefore(v, s);
+              })(document, 'script');
+            `,
+          }}
+        />
       </body>
     </html>
   );

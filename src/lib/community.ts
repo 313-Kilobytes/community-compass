@@ -173,7 +173,7 @@ const REGION_KEYWORDS: Record<CapeTownRegion, string[]> = {
 
 export const STARTER_POSTS: CommunityPost[] = CAPE_TOWN_REGIONS.map((region, index) => ({
   id: `starter-${index + 1}`,
-  name: "CommunityHub",
+  name: "Community Compass",
   area: region === "CBD & City Bowl" ? "Woodstock" : region,
   region,
   category: "Community Update",
@@ -221,13 +221,11 @@ export function writeJson<T>(key: string, value: T) {
 }
 
 export function loadFeedPosts() {
-  return ensureRegionalStarterPosts(readJson<CommunityPost[]>(FEED_STORAGE_KEY, STARTER_POSTS));
+  return readJson<CommunityPost[]>(FEED_STORAGE_KEY, []).filter((post) => !post.id.startsWith("starter-"));
 }
 
 export function ensureRegionalStarterPosts(posts: CommunityPost[]) {
-  const starterRegions = new Set(posts.filter((post) => post.id.startsWith("starter-")).map((post) => post.region ?? detectCapeTownRegion(post.area, post.coords)));
-  const missingStarters = STARTER_POSTS.filter((post) => !starterRegions.has(post.region ?? detectCapeTownRegion(post.area, post.coords)));
-  return [...posts, ...missingStarters];
+  return posts.filter((post) => !post.id.startsWith("starter-"));
 }
 
 export function loadChatSessions() {

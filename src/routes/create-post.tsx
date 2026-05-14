@@ -44,7 +44,7 @@ const POST_CATEGORIES: PostCategory[] = ["Alert", "Event", "Job", "Community Upd
 export const Route = createFileRoute("/create-post")({
   head: () => ({
     meta: [
-      { title: "Create Post - CommunityHub" },
+      { title: "Create Post - Community Compass" },
       { name: "description", content: "Create a local community update." },
     ],
   }),

@@ -30,7 +30,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 export const Route = createFileRoute("/insights")({
   head: () => ({
     meta: [
-      { title: "Community Insights - CommunityHub" },
+      { title: "Community Insights - Community Compass" },
       {
         name: "description",
         content: "Real-time review intelligence for Cape Town community services and stores.",

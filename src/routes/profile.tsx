@@ -9,8 +9,8 @@ import type { AdminTicket, TicketPriority } from "@/lib/server/admin-store";
 export const Route = createFileRoute("/profile")({
   head: () => ({
     meta: [
-      { title: "Profile - CommunityHub" },
-      { name: "description", content: "Manage your CommunityHub account and locations." },
+      { title: "Profile - Community Compass" },
+      { name: "description", content: "Manage your Community Compass account and locations." },
     ],
   }),
   component: ProfilePage,
