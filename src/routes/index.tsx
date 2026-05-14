@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { analyzeIncident } from "@/lib/crisis-intelligence";
 import { useT } from "@/lib/i18n";
+import { NearbyLeafletMap } from "@/components/NearbyLeafletMap";
 
 type IncidentType = "Crime" | "Infrastructure" | "Medical" | "Weather" | "Scam" | "Fire";
 type Severity = "High" | "Medium" | "Low";
@@ -58,6 +59,7 @@ type HotspotRow = {
   icon: typeof AlertTriangle;
   left: number;
   top: number;
+  coords?: { lat: number; lng: number };
 };
 type NearbyPlace = {
   id: string;
@@ -290,6 +292,7 @@ function ResourcesPage() {
           issue,
           level: Math.min(100, Math.round(group.score / group.count / 2)),
           icon: incidentTypeMeta[type].icon,
+          coords: group.coordsCount ? { lat: group.lat / group.coordsCount, lng: group.lng / group.coordsCount } : undefined,
           ...positionForArea(area, group.coordsCount ? { lat: group.lat / group.coordsCount, lng: group.lng / group.coordsCount } : undefined),
         };
       })
@@ -522,35 +525,10 @@ function ResourcesPage() {
               <LocateFixed className="h-3.5 w-3.5" /> Near me
             </button>
           </div>
-          <div className="relative h-52 overflow-hidden rounded-xl border border-border bg-[linear-gradient(135deg,rgba(15,23,42,.08),rgba(15,23,42,.02))]">
-            <div className="absolute inset-0 opacity-25 [background-image:linear-gradient(to_right,currentColor_1px,transparent_1px),linear-gradient(to_bottom,currentColor_1px,transparent_1px)] [background-size:32px_32px]" />
-            <div className="absolute left-1/2 top-1/2 z-10 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary ring-8 ring-primary/20" title="Current map center" />
-            {nearbyPlaces.map((place) => {
-              const point = positionNear(mapOrigin, place);
-              return (
-                <div
-                  key={place.id}
-                  className="absolute z-10 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-500 ring-4 ring-emerald-500/20"
-                  style={{ left: `${point.left}%`, top: `${point.top}%` }}
-                  title={`${place.name}: ${place.type}`}
-                />
-              );
-            })}
-            {hotspotRows.map((row) => (
-              <div
-                key={row.area}
-                className="absolute h-4 w-4 rounded-full bg-red-500 ring-8 ring-red-500/20"
-                style={{ left: `${row.left}%`, top: `${row.top}%`, opacity: Math.max(0.45, row.level / 100) }}
-                title={`${row.area}: ${row.issue}`}
-              />
-            ))}
-            {placesLoading && (
-              <div className="absolute inset-0 grid place-items-center bg-card/55 text-sm text-muted-foreground">
-                Loading nearby Cape Town places...
-              </div>
-            )}
+          <div className="relative h-52 w-full overflow-hidden rounded-xl border border-border bg-secondary">
+            <NearbyLeafletMap origin={mapOrigin} nearbyPlaces={nearbyPlaces} hotspotRows={hotspotRows} placesLoading={placesLoading} />
             {!placesLoading && nearbyPlaces.length === 0 && hotspotRows.length === 0 && (
-              <div className="absolute inset-0 grid place-items-center px-6 text-center text-sm text-muted-foreground">
+              <div className="pointer-events-none absolute inset-0 z-[1000] grid place-items-center px-6 text-center text-sm text-muted-foreground">
                 Nearby places load from Cape Town by default. Use Near me to center on your location.
               </div>
             )}

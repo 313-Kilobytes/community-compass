@@ -46,6 +46,22 @@ type CommunityPlace = {
   lng: number;
 };
 
+type OverpassElement = {
+  id: number;
+  type: string;
+  lat?: number;
+  lon?: number;
+  center?: {
+    lat?: number;
+    lon?: number;
+  };
+  tags?: Record<string, string>;
+};
+
+type OverpassResponse = {
+  elements?: OverpassElement[];
+};
+
 const PLACE_SEARCHES = [
   { category: "Nearby places", type: "point_of_interest", keyword: "community" },
   { category: "Clinics", type: "hospital", keyword: "clinic" },
@@ -84,6 +100,91 @@ function uniquePlaces(places: CommunityPlace[]) {
           `${item.name}-${item.address}`.toLowerCase() === `${place.name}-${place.address}`.toLowerCase(),
       ) === index,
   );
+}
+
+function overpassCategory(tags: Record<string, string>) {
+  const amenity = tags.amenity;
+  const shop = tags.shop;
+  const office = tags.office;
+  const healthcare = tags.healthcare;
+  const emergency = tags.emergency;
+  const leisure = tags.leisure;
+  const tourism = tags.tourism;
+
+  if (healthcare || ["clinic", "hospital", "doctors", "pharmacy"].includes(amenity ?? "")) return "Clinics";
+  if (["supermarket", "convenience", "greengrocer", "butcher", "bakery"].includes(shop ?? "")) return "Grocery stores";
+  if (["police", "fire_station", "ambulance_station"].includes(amenity ?? "") || emergency) return "Emergency services";
+  if (["townhall", "public_building", "courthouse"].includes(amenity ?? "") || office === "government" || tags.operator?.toLowerCase().includes("city of cape town")) {
+    return "Municipal offices";
+  }
+  if (["community_centre", "library", "marketplace", "social_facility", "place_of_worship"].includes(amenity ?? "") || leisure === "park") {
+    return "Community hotspots";
+  }
+  if (["ngo", "association", "charity", "foundation"].includes(office ?? "") || /ngo|charity|foundation|community/i.test(`${tags.name ?? ""} ${tags.operator ?? ""}`)) {
+    return "NGOs";
+  }
+  if (tourism || leisure || amenity || shop || office) return "Nearby places";
+  return "Nearby places";
+}
+
+function overpassAddress(tags: Record<string, string>, fallback: string) {
+  const street = tags["addr:street"];
+  const house = tags["addr:housenumber"];
+  const suburb = tags["addr:suburb"] ?? tags["addr:city"];
+  const address = [house, street, suburb].filter(Boolean).join(" ");
+  return address || tags.operator || fallback;
+}
+
+async function fetchOverpassNearbyPlaces(lat: number, lng: number) {
+  const query = `
+    [out:json][timeout:20];
+    (
+      node(around:3500,${lat},${lng})[name][amenity];
+      node(around:3500,${lat},${lng})[name][shop];
+      node(around:3500,${lat},${lng})[name][office];
+      node(around:3500,${lat},${lng})[name][healthcare];
+      node(around:3500,${lat},${lng})[name][emergency];
+      node(around:3500,${lat},${lng})[name][tourism];
+      node(around:3500,${lat},${lng})[name][leisure];
+      way(around:3500,${lat},${lng})[name][amenity];
+      way(around:3500,${lat},${lng})[name][shop];
+      way(around:3500,${lat},${lng})[name][office];
+      way(around:3500,${lat},${lng})[name][healthcare];
+      way(around:3500,${lat},${lng})[name][emergency];
+      way(around:3500,${lat},${lng})[name][tourism];
+      way(around:3500,${lat},${lng})[name][leisure];
+    );
+    out center 80;
+  `;
+  const response = await fetch("https://overpass-api.de/api/interpreter", {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=UTF-8" },
+    body: query,
+  });
+  if (!response.ok) throw new Error("OpenStreetMap nearby places could not load");
+
+  const json = (await response.json()) as OverpassResponse;
+  const places = (json.elements ?? [])
+    .map((item): CommunityPlace | null => {
+      const tags = item.tags ?? {};
+      const name = tags.name;
+      const placeLat = item.lat ?? item.center?.lat;
+      const placeLng = item.lon ?? item.center?.lon;
+      if (!name || !Number.isFinite(placeLat) || !Number.isFinite(placeLng)) return null;
+      const category = overpassCategory(tags);
+
+      return {
+        id: `osm-${item.type}-${item.id}`,
+        name,
+        category,
+        address: overpassAddress(tags, category),
+        lat: Number(placeLat),
+        lng: Number(placeLng),
+      };
+    })
+    .filter((place): place is CommunityPlace => Boolean(place));
+
+  return uniquePlaces(places).slice(0, 36);
 }
 
 async function fetchNearbyPlaces(key: string, lat: number, lng: number) {
@@ -184,10 +285,16 @@ export const Route = createFileRoute("/api/community-map")({
           if (googlePlaces.length > 0) return Response.json({ places: googlePlaces, provider: "google" });
 
           const serpKey = serpApiKey();
-          if (!serpKey) return Response.json({ places: [], provider: "none" });
+          if (!serpKey) {
+            const osmPlaces = await fetchOverpassNearbyPlaces(lat, lng).catch(() => []);
+            return Response.json({ places: osmPlaces, provider: "openstreetmap-overpass" });
+          }
 
-          const serpPlaces = await fetchSerpNearbyPlaces(serpKey, lat, lng);
-          return Response.json({ places: serpPlaces, provider: "serpapi-google-maps" });
+          const serpPlaces = await fetchSerpNearbyPlaces(serpKey, lat, lng).catch(() => []);
+          if (serpPlaces.length > 0) return Response.json({ places: serpPlaces, provider: "serpapi-google-maps" });
+
+          const osmPlaces = await fetchOverpassNearbyPlaces(lat, lng).catch(() => []);
+          return Response.json({ places: osmPlaces, provider: "openstreetmap-overpass" });
         } catch (error) {
           return Response.json(
             { error: error instanceof Error ? error.message : "Nearby places could not load" },

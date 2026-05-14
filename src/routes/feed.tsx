@@ -49,6 +49,7 @@ import {
 } from "@/lib/community";
 import { useAuth } from "@/lib/auth";
 import { useT } from "@/lib/i18n";
+import { CommunityLeafletMap } from "@/components/CommunityLeafletMap";
 import type { AdminBroadcast } from "@/lib/server/admin-store";
 
 type LocationHit = {
@@ -72,6 +73,13 @@ type FeedTab = "Nearby" | "Trending" | "Latest" | "Municipal Alerts";
 const POST_CATEGORIES: PostCategory[] = ["Alert", "Event", "Job", "Community Update", "Safety Issue"];
 const FEED_TABS: FeedTab[] = ["Nearby", "Trending", "Latest", "Municipal Alerts"];
 const DEFAULT_MAP_CENTER = { lat: -33.9249, lng: 18.4241 };
+const KNOWN_MAP_POINTS = [
+  {
+    terms: ["capaciti", "capa citi", "97 durham", "durham avenue", "durham ave"],
+    label: "CAPACITI, 97 Durham Avenue, Salt River",
+    coords: { lat: -33.9335, lng: 18.4604 },
+  },
+] as const;
 const PLACE_SEARCHES = [
   { category: "Nearby places", type: "point_of_interest", keyword: "community" },
   { category: "Clinics", type: "hospital", keyword: "clinic" },
@@ -636,13 +644,32 @@ function CommunityMap({
   area: string;
   region: CapeTownRegion;
 }) {
-  const [center, setCenter] = useState(coords ?? DEFAULT_MAP_CENTER);
+  const knownPoint = knownMapPointFor(area);
+  const [center, setCenter] = useState(coords ?? knownPoint?.coords ?? DEFAULT_MAP_CENTER);
   const [places, setPlaces] = useState<CommunityPlace[]>([]);
   const [status, setStatus] = useState("Loading nearby community places...");
   const [activeCategory, setActiveCategory] = useState("All");
+  const requestedBrowserLocation = useRef(false);
 
   useEffect(() => {
     if (coords) setCenter(coords);
+    else if (knownPoint) setCenter(knownPoint.coords);
+  }, [coords, knownPoint]);
+
+  useEffect(() => {
+    if (coords || requestedBrowserLocation.current || !navigator.geolocation) return;
+    requestedBrowserLocation.current = true;
+    setStatus("Finding your current location for an accurate community map...");
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setCenter({
+          lat: Number(position.coords.latitude.toFixed(5)),
+          lng: Number(position.coords.longitude.toFixed(5)),
+        });
+      },
+      () => setStatus("Using the Cape Town map center. Tap Use my location for a more accurate map."),
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
   }, [coords]);
 
   useEffect(() => {
@@ -691,6 +718,8 @@ function CommunityMap({
     activeCategory === "All" ? places : places.filter((place) => place.category === activeCategory);
   const categories = ["All", ...PLACE_SEARCHES.map((search) => search.category)];
   const centerMapUrl = `https://www.google.com/maps/search/?api=1&query=${center.lat},${center.lng}`;
+  const mapLoading = status.startsWith("Loading") || status.startsWith("Finding");
+  const mapLabel = (knownPoint?.label ?? area) || region;
 
   return (
     <section className="bg-card border border-border rounded-2xl p-5 shadow-card">
@@ -711,36 +740,16 @@ function CommunityMap({
       </div>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
-        <div className="relative min-h-[360px] overflow-hidden rounded-xl border border-border bg-[linear-gradient(135deg,rgba(14,165,233,.14),rgba(16,185,129,.12),rgba(250,204,21,.12))]">
-          <div className="absolute inset-0 opacity-35 [background-image:linear-gradient(to_right,currentColor_1px,transparent_1px),linear-gradient(to_bottom,currentColor_1px,transparent_1px)] [background-size:34px_34px]" />
-          <div className="absolute left-4 top-4 rounded-full border border-border bg-card/90 px-3 py-1.5 text-xs font-semibold shadow-card">
-            {area || region}
+        <div className="relative min-h-[360px] overflow-hidden rounded-xl border border-border bg-secondary">
+          <CommunityLeafletMap center={center} places={visiblePlaces} label={mapLabel} loading={mapLoading} zoom={16} />
+          <div className="pointer-events-none absolute left-4 top-4 z-[1000] rounded-full border border-border bg-card/90 px-3 py-1.5 text-xs font-semibold shadow-card">
+            {mapLabel}
           </div>
-          <div className="absolute left-1/2 top-1/2 grid h-14 w-14 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-primary text-primary-foreground shadow-elegant ring-8 ring-primary/20">
-            You
-          </div>
-          {visiblePlaces.slice(0, 16).map((place, index) => {
-            const left = 18 + ((index * 23) % 64);
-            const top = 20 + ((index * 31) % 58);
-            return (
-              <a
-                key={`${place.id}-pin`}
-                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${place.name} ${place.address}`)}`}
-                target="_blank"
-                rel="noreferrer"
-                className="absolute grid h-8 w-8 place-items-center rounded-full border border-background bg-emerald-500 text-[10px] font-bold text-white shadow-card transition hover:scale-110"
-                style={{ left: `${left}%`, top: `${top}%` }}
-                title={place.name}
-              >
-                {index + 1}
-              </a>
-            );
-          })}
           <a
             href={centerMapUrl}
             target="_blank"
             rel="noreferrer"
-            className="absolute bottom-4 right-4 rounded-lg bg-card/95 px-3 py-2 text-xs font-semibold text-primary shadow-card hover:underline"
+            className="absolute bottom-4 right-4 z-[1000] rounded-lg bg-card/95 px-3 py-2 text-xs font-semibold text-primary shadow-card hover:underline"
           >
             Open in Google Maps
           </a>
@@ -761,7 +770,7 @@ function CommunityMap({
           <div className="max-h-[300px] space-y-2 overflow-auto pr-1">
             {visiblePlaces.length === 0 ? (
               <div className="rounded-xl border border-dashed border-border px-3 py-4 text-xs text-muted-foreground">
-                Nearby services will appear here when Google Places returns matches.
+                Nearby services will appear here when OpenStreetMap finds matches near the map center.
               </div>
             ) : (
               visiblePlaces.map((place) => (
@@ -1210,6 +1219,12 @@ function engagementForPost(post: CommunityPost, commentsByArea: Record<string, C
 
 function realPosts(posts: CommunityPost[]) {
   return posts.filter((post) => !post.id.startsWith("starter-"));
+}
+
+function knownMapPointFor(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return undefined;
+  return KNOWN_MAP_POINTS.find((point) => point.terms.some((term) => normalized.includes(term)));
 }
 
 function activePeopleLabel(count: number, region: CapeTownRegion) {
