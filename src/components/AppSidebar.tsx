@@ -8,6 +8,7 @@ import {
   Newspaper,
   UserRound,
   ShieldCheck,
+  PackageCheck,
 } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
@@ -15,6 +16,7 @@ import { useAuth } from "@/lib/auth";
 const items = [
   { title: "nav.resources" as const, url: "/", icon: LayoutGrid },
   { title: "nav.feed" as const, url: "/feed", icon: Newspaper },
+  { title: "nav.availability" as const, url: "/availability", icon: PackageCheck },
   { title: "nav.groceries" as const, url: "/groceries", icon: ShoppingBasket },
   { title: "nav.emergency" as const, url: "/emergency", icon: Siren },
   { title: "nav.insights" as const, url: "/insights", icon: BarChart3 },
