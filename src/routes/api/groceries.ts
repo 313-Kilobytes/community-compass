@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { getServerEnv } from "@/lib/server/env";
 
 type StoreStatus = "open" | "closed" | "closing-soon" | "unknown";
 
@@ -120,7 +121,7 @@ const RETAILERS: Retailer[] = [
 ];
 
 function firecrawlApiKey() {
-  return process.env.FIRECRAWL_API_KEY || import.meta.env.FIRECRAWL_API_KEY;
+  return getServerEnv("FIRECRAWL_API_KEY");
 }
 
 const PRICE_PATTERNS = [

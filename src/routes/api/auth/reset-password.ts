@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { createServerSupabaseClient } from "@/lib/supabase";
+import { createServerSupabaseClient } from "@/lib/server/supabase";
 import { json, validatePassword } from "@/lib/server/auth";
 
 export const Route = createFileRoute("/api/auth/reset-password")({

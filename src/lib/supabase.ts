@@ -16,19 +16,3 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: true
   }
 })
-
-// Server-side client for API routes
-export const createServerSupabaseClient = () => {
-  const serviceRoleKey = serverEnv.SUPABASE_SERVICE_ROLE_KEY
-
-  if (!serviceRoleKey) {
-    throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY')
-  }
-
-  return createClient<Database>(supabaseUrl, serviceRoleKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
-  })
-}

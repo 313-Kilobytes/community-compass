@@ -9,7 +9,7 @@ import {
   type CommunitySnapshot,
   type PostCategory,
 } from "@/lib/community";
-import { createServerSupabaseClient } from "@/lib/supabase";
+import { createServerSupabaseClient } from "@/lib/server/supabase";
 import type { Database, Json } from "@/lib/types/supabase";
 
 type ActiveUser = {

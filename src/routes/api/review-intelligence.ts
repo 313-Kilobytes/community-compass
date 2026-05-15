@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { getServerEnv } from "@/lib/server/env";
 
 type Sentiment = "positive" | "neutral" | "negative";
 
@@ -552,7 +553,7 @@ async function analyzeWithHuggingFace(reviews: Review[], apiKey?: string) {
   }
 
   try {
-    const model = process.env.HUGGINGFACE_REVIEW_MODEL ?? "meta-llama/Llama-3.1-8B-Instruct";
+    const model = getServerEnv("HUGGINGFACE_REVIEW_MODEL") ?? "meta-llama/Llama-3.1-8B-Instruct";
     const content = await requestHuggingFaceClassification(
       apiKey,
       model,
@@ -878,12 +879,7 @@ async function collectReviews(apiKey: string, query: string) {
 }
 
 function serpApiKey() {
-  return (
-    process.env.SERPAPI_API_KEY ??
-    process.env.SERP_API_KEY ??
-    process.env.SERPAPI_KEY ??
-    process.env.SERPAPI_APIKEY
-  );
+  return getServerEnv("SERPAPI_API_KEY", "SERP_API_KEY", "SERPAPI_KEY", "SERPAPI_APIKEY");
 }
 
 export const Route = createFileRoute("/api/review-intelligence")({
@@ -912,7 +908,7 @@ export const Route = createFileRoute("/api/review-intelligence")({
 
           const analyzed = await analyzeWithHuggingFace(
             collected,
-            process.env.HUGGINGFACE_API_KEY ?? process.env.HF_TOKEN,
+            getServerEnv("HUGGINGFACE_API_KEY", "HF_TOKEN"),
           ).catch(() => ({
             provider: undefined,
             reviews: collected.map((review) => ({ ...review, sentiment: "neutral" as const, score: 0 })),

@@ -1,5 +1,5 @@
 import { CAPE_TOWN_REGIONS, detectCapeTownRegion, type CapeTownRegion } from "@/lib/community";
-import { createServerSupabaseClient } from "@/lib/supabase";
+import { createServerSupabaseClient } from "@/lib/server/supabase";
 import type { User as SupabaseAuthUser } from "@supabase/supabase-js";
 import type { Database, Json } from "@/lib/types/supabase";
 

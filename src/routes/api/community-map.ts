@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { getServerEnv } from "@/lib/server/env";
 
 type GooglePlace = {
   place_id?: string;
@@ -146,31 +147,19 @@ const cache = new Map<string, { at: number; data: CommunityPlace[]; provider: st
 const TTL = 1000 * 60 * 10;
 
 function googleMapsKey() {
-  return process.env.GOOGLE_MAPS_API_KEY ?? process.env.VITE_GOOGLE_MAPS_API_KEY;
-}
-
-function cleanKey(value: string | undefined) {
-  return value?.trim().replace(/^["']|["']$/g, "");
+  return getServerEnv("GOOGLE_MAPS_API_KEY", "VITE_GOOGLE_MAPS_API_KEY");
 }
 
 function serpApiKeys() {
   return [
-    cleanKey(process.env.SERPAPI_API_KEY),
-    cleanKey(process.env.SERP_API_KEY),
-    cleanKey(process.env.SERPAPI_KEY),
-    cleanKey(process.env.SERPAPI_APIKEY),
-    cleanKey(process.env.VITE_SERPAPI_API_KEY),
-    cleanKey(process.env.VITE_SERP_API_KEY),
-    cleanKey(process.env.SEREAPI_API_KEY),
-    cleanKey(process.env.VITE_SEREAPI_API_KEY),
-    cleanKey(import.meta.env.SERPAPI_API_KEY),
-    cleanKey(import.meta.env.SERP_API_KEY),
-    cleanKey(import.meta.env.SERPAPI_KEY),
-    cleanKey(import.meta.env.SERPAPI_APIKEY),
-    cleanKey(import.meta.env.VITE_SERPAPI_API_KEY),
-    cleanKey(import.meta.env.VITE_SERP_API_KEY),
-    cleanKey(import.meta.env.SEREAPI_API_KEY),
-    cleanKey(import.meta.env.VITE_SEREAPI_API_KEY),
+    getServerEnv("SERPAPI_API_KEY"),
+    getServerEnv("SERP_API_KEY"),
+    getServerEnv("SERPAPI_KEY"),
+    getServerEnv("SERPAPI_APIKEY"),
+    getServerEnv("VITE_SERPAPI_API_KEY"),
+    getServerEnv("VITE_SERP_API_KEY"),
+    getServerEnv("SEREAPI_API_KEY"),
+    getServerEnv("VITE_SEREAPI_API_KEY"),
   ].filter((key, index, arr): key is string => Boolean(key) && arr.indexOf(key) === index);
 }
 
